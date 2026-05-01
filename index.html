@@ -14,10 +14,11 @@
       <div class="logo">
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="13" stroke="#1D9E75" stroke-width="1.5"/><path d="M7 14c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/><circle cx="14" cy="17" r="3" fill="#1D9E75"/></svg>
       </div>
-      <div>
+      <div style="flex:1;">
         <h1>Pickleball League</h1>
         <p class="subtitle">Round Robin Tournament Manager</p>
       </div>
+      <button class="btn-danger" id="reset-btn" onclick="confirmReset()" style="display:none;">Reset league</button>
     </div>
   </div>
 
@@ -30,6 +31,11 @@
 
     <!-- SETUP TAB -->
     <div id="tab-setup" class="section active">
+      <div id="saved-banner" class="storage-banner" style="display:none;">
+        <div class="storage-dot"></div>
+        <span id="saved-banner-text">League in progress — scores auto-saved.</span>
+      </div>
+
       <div class="card">
         <h3>League mode</h3>
         <div class="mode-picker">
@@ -81,6 +87,9 @@
     </div>
   </div>
 </div>
+
+<div class="toast" id="toast">&#10003; Saved</div>
+
 <script src="app.js"></script>
 </body>
 </html>

@@ -7,25 +7,56 @@ let toastTimer = null;
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ S, activeRound }));
-    showToast();
+    updateShareURL();
+    showToast('Saved');
   } catch(e) {}
 }
 
 function loadState() {
+  // First try URL hash
+  if (window.location.hash && window.location.hash.length > 1) {
+    try {
+      const decoded = JSON.parse(decodeURIComponent(atob(window.location.hash.slice(1))));
+      if (decoded?.S) { S = decoded.S; activeRound = decoded.activeRound || 0; return 'url'; }
+    } catch(e) {}
+  }
+  // Fallback to localStorage
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const saved = JSON.parse(raw);
-    if (saved?.S) { S = saved.S; activeRound = saved.activeRound || 0; return true; }
+    if (saved?.S) { S = saved.S; activeRound = saved.activeRound || 0; return 'local'; }
   } catch(e) {}
   return false;
 }
 
-function showToast() {
+function updateShareURL() {
+  try {
+    const encoded = btoa(encodeURIComponent(JSON.stringify({ S, activeRound })));
+    window.history.replaceState(null, '', '#' + encoded);
+    const shareInput = document.getElementById('share-url');
+    if (shareInput) shareInput.value = window.location.href;
+  } catch(e) {}
+}
+
+function copyShareURL() {
+  const shareInput = document.getElementById('share-url');
+  if (!shareInput) return;
+  shareInput.select();
+  navigator.clipboard.writeText(shareInput.value).then(() => {
+    showToast('Link copied!');
+  }).catch(() => {
+    document.execCommand('copy');
+    showToast('Link copied!');
+  });
+}
+
+function showToast(msg) {
   const t = document.getElementById('toast');
+  t.textContent = (msg === 'Saved' ? '✓ ' : '🔗 ') + msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
 function confirmReset() {
@@ -33,8 +64,10 @@ function confirmReset() {
     localStorage.removeItem(STORAGE_KEY);
     S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
     activeRound = 0;
+    window.history.replaceState(null, '', window.location.pathname);
     document.getElementById('reset-btn').style.display = 'none';
     document.getElementById('saved-banner').style.display = 'none';
+    document.getElementById('share-box').style.display = 'none';
     refreshPlayerInputs();
     document.getElementById('matches-list').innerHTML = '';
     document.getElementById('standings-body').innerHTML = '';
@@ -104,7 +137,9 @@ function generateLeague() {
   saveState();
   document.getElementById('reset-btn').style.display = '';
   document.getElementById('saved-banner').style.display = '';
+  document.getElementById('share-box').style.display = '';
   updateBanner();
+  updateShareURL();
   renderSchedule();
   renderStandings();
   gotoTab('schedule', document.getElementById('nav-schedule'));
@@ -114,7 +149,7 @@ function updateBanner() {
   const total = S.schedule.reduce((s, r) => s + r.length, 0);
   const done = Object.values(S.results).filter(r => r.done).length;
   const el = document.getElementById('saved-banner-text');
-  if (el) el.textContent = `League in progress · ${done}/${total} matches saved · auto-saves on every score.`;
+  if (el) el.textContent = `League in progress · ${done}/${total} matches saved · share the link to view on any device.`;
 }
 
 function generateFixed(players, rounds) {
@@ -224,6 +259,7 @@ function submitScore(mid) {
   S.results[mid] = { s1, s2, done: true };
   saveState();
   updateBanner();
+  updateShareURL();
   renderSchedule();
 }
 
@@ -381,7 +417,9 @@ const loaded = loadState();
 if (loaded && S.teams.length) {
   document.getElementById('reset-btn').style.display = '';
   document.getElementById('saved-banner').style.display = '';
+  document.getElementById('share-box').style.display = '';
   updateBanner();
+  updateShareURL();
   refreshPlayerInputs();
   renderSchedule();
   renderStandings();

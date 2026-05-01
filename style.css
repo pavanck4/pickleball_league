@@ -498,3 +498,55 @@ input:focus {
 .td-win { color: var(--green-dark); font-weight: 500; }
 .td-loss { color: #c0392b; }
 .muted { color: var(--text-tertiary); font-size: 14px; }
+
+.share-box {
+  background: #E6F1FB;
+  border: 0.5px solid #B5D4F4;
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.share-label {
+  font-size: 13px;
+  color: #0C447C;
+  font-weight: 500;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.share-row input {
+  flex: 1;
+  font-size: 12px;
+  color: #185FA5;
+  background: #fff;
+  border-color: #B5D4F4;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-copy {
+  background: #185FA5;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-copy:hover { background: #0C447C; }

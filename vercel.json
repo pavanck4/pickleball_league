@@ -1,0 +1,4 @@
+{
+  "buildCommand": "echo \"window.__env = { FIREBASE_API_KEY: '${FIREBASE_API_KEY}' };\" > config.js",
+  "outputDirectory": "."
+}

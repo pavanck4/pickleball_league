@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDPDDpW7Hf0GqBuCXqvg9IeX9zVlaDOYeM",
+  apiKey: window.__env?.FIREBASE_API_KEY,
   authDomain: "pikleball-scoreboard.firebaseapp.com",
   projectId: "pikleball-scoreboard",
   storageBucket: "pikleball-scoreboard.firebasestorage.app",

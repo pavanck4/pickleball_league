@@ -1,73 +1,367 @@
-const STORAGE_KEY = 'pickleball_league_v1';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDPDDpW7Hf0GqBuCXqvg9IeX9zVlaDOYeM",
+  authDomain: "pikleball-scoreboard.firebaseapp.com",
+  projectId: "pikleball-scoreboard",
+  storageBucket: "pikleball-scoreboard.firebasestorage.app",
+  messagingSenderId: "495511862752",
+  appId: "1:495511862752:web:e479e2c24eb44b0e153f85",
+  measurementId: "G-TZWRVBBBSD"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
 
 let S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
 let activeRound = 0;
+let leagueCode = null;
+let adminPin = null;
+let isAdmin = false;
+let unsubscribe = null;
 let toastTimer = null;
+let isSaving = false;
 
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ S, activeRound }));
-    updateShareURL();
-    showToast('Saved');
-  } catch(e) {}
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function generateCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'PK-';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
 }
 
-function loadState() {
-  // First try URL hash
-  if (window.location.hash && window.location.hash.length > 1) {
-    try {
-      const decoded = JSON.parse(decodeURIComponent(atob(window.location.hash.slice(1))));
-      if (decoded?.S) { S = decoded.S; activeRound = decoded.activeRound || 0; return 'url'; }
-    } catch(e) {}
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'success' ? '✓ ' : type === 'link' ? '🔗 ' : 'ℹ ') + msg;
+  t.style.background = type === 'success' ? '#1D9E75' : type === 'link' ? '#185FA5' : '#633806';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function setSyncStatus(status) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (status === 'synced') { el.className = 'sync-status synced'; el.textContent = '● Live'; }
+  else if (status === 'saving') { el.className = 'sync-status saving'; el.textContent = '● Saving…'; }
+  else if (status === 'error') { el.className = 'sync-status error'; el.textContent = '● Offline'; }
+  else { el.className = 'sync-status'; el.textContent = ''; }
+}
+
+function setAdminMode(val) {
+  isAdmin = val;
+  const badge = document.getElementById('admin-badge');
+  if (badge) {
+    badge.style.display = val ? '' : 'none';
   }
-  // Fallback to localStorage
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
-    const saved = JSON.parse(raw);
-    if (saved?.S) { S = saved.S; activeRound = saved.activeRound || 0; return 'local'; }
-  } catch(e) {}
-  return false;
+  // Re-render schedule to show/hide save buttons
+  if (S.schedule.length) renderSchedule();
 }
 
-function updateShareURL() {
-  try {
-    const encoded = btoa(encodeURIComponent(JSON.stringify({ S, activeRound })));
-    window.history.replaceState(null, '', '#' + encoded);
-    const shareInput = document.getElementById('share-url');
-    if (shareInput) shareInput.value = window.location.href;
-  } catch(e) {}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
-function copyShareURL() {
-  const shareInput = document.getElementById('share-url');
-  if (!shareInput) return;
-  shareInput.select();
-  navigator.clipboard.writeText(shareInput.value).then(() => {
-    showToast('Link copied!');
-  }).catch(() => {
-    document.execCommand('copy');
-    showToast('Link copied!');
+function formatDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ── PIN Modal ─────────────────────────────────────────────────────────────────
+
+function showPinModal(mode, onSuccess) {
+  const overlay = document.getElementById('pin-overlay');
+  const title = document.getElementById('pin-modal-title');
+  const desc = document.getElementById('pin-modal-desc');
+  const input = document.getElementById('pin-input');
+  const errEl = document.getElementById('pin-err');
+  const confirmBtn = document.getElementById('pin-confirm-btn');
+
+  if (mode === 'create') {
+    title.textContent = 'Set admin PIN';
+    desc.textContent = 'Create a 4-digit PIN. Share it with players who can enter scores.';
+  } else {
+    title.textContent = 'Enter admin PIN';
+    desc.textContent = 'Enter the PIN to unlock score entry for this league.';
+  }
+
+  input.value = '';
+  errEl.textContent = '';
+  overlay.style.display = 'flex';
+  setTimeout(() => input.focus(), 100);
+
+  confirmBtn.onclick = () => {
+    const val = input.value.trim();
+    if (!/^\d{4}$/.test(val)) { errEl.textContent = 'PIN must be exactly 4 digits.'; return; }
+    overlay.style.display = 'none';
+    onSuccess(val);
+  };
+
+  document.getElementById('pin-cancel-btn').onclick = () => {
+    overlay.style.display = 'none';
+  };
+
+  input.onkeydown = (e) => { if (e.key === 'Enter') confirmBtn.click(); };
+}
+
+function promptAdminPin() {
+  if (!leagueCode) return;
+  showPinModal('enter', async (val) => {
+    if (val === adminPin) {
+      setAdminMode(true);
+      // Store in session so page refresh doesn't log out
+      sessionStorage.setItem('pk_admin_' + leagueCode, val);
+      showToast('Admin access granted!');
+    } else {
+      showToast('Incorrect PIN', 'error');
+    }
   });
 }
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = (msg === 'Saved' ? '✓ ' : '🔗 ') + msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+// ── Standings Calculator ──────────────────────────────────────────────────────
+
+function calcStandings(state) {
+  if (state.mode === 'fixed') {
+    const stats = state.teams.map(t => ({ name: t.name, players: t.players, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0 }));
+    state.schedule.forEach(r => r.forEach(m => {
+      const res = state.results[m.id];
+      if (!res?.done) return;
+      const s1 = parseInt(res.s1), s2 = parseInt(res.s2);
+      const st1 = stats[m.t1], st2 = stats[m.t2];
+      st1.played++; st2.played++; st1.scored += s1; st1.conceded += s2; st2.scored += s2; st2.conceded += s1;
+      if (s1 > s2) { st1.wins++; st1.pts += 2; st2.losses++; } else { st2.wins++; st2.pts += 2; st1.losses++; }
+    }));
+    stats.forEach(s => s.diff = s.scored - s.conceded);
+    return stats.sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
+  } else {
+    const stats = {};
+    state.players.forEach((p, i) => { stats[i] = { name: p, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0 }; });
+    state.schedule.forEach(r => r.forEach(m => {
+      const res = state.results[m.id];
+      if (!res?.done) return;
+      const s1 = parseInt(res.s1), s2 = parseInt(res.s2);
+      [m.t1pair[0], m.t1pair[1]].forEach(p => { stats[p].played++; stats[p].scored += s1; stats[p].conceded += s2; if (s1 > s2) { stats[p].wins++; stats[p].pts += 2; } else stats[p].losses++; });
+      [m.t2pair[0], m.t2pair[1]].forEach(p => { stats[p].played++; stats[p].scored += s2; stats[p].conceded += s1; if (s2 > s1) { stats[p].wins++; stats[p].pts += 2; } else stats[p].losses++; });
+    }));
+    return Object.values(stats).map(s => ({ ...s, diff: s.scored - s.conceded })).sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
+  }
+}
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+
+async function saveToFirebase() {
+  if (!leagueCode || isSaving) return;
+  isSaving = true;
+  setSyncStatus('saving');
+  try {
+    const totalM = S.schedule.reduce((s, r) => s + r.length, 0);
+    const doneM = Object.values(S.results).filter(r => r.done).length;
+    const isComplete = doneM === totalM && totalM > 0;
+    const standings = calcStandings(S);
+
+    await setDoc(doc(db, 'leagues', leagueCode), {
+      ...S,
+      leagueCode,
+      adminPin,
+      isComplete,
+      standings,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    if (isComplete) {
+      await setDoc(doc(db, 'history', leagueCode), {
+        leagueCode,
+        mode: S.mode,
+        players: S.players,
+        teams: S.teams,
+        rounds: S.rounds,
+        results: S.results,
+        schedule: S.schedule,
+        standings,
+        isComplete: true,
+        completedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      }, { merge: true });
+      showToast('League complete — saved to history!');
+    } else {
+      showToast('Saved');
+    }
+
+    setSyncStatus('synced');
+    localStorage.setItem('pickleball_last_code', leagueCode);
+  } catch(e) {
+    setSyncStatus('error');
+    showToast('Save failed — check connection', 'error');
+    console.error(e);
+  } finally {
+    isSaving = false;
+  }
+}
+
+function subscribeToLeague(code) {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(doc(db, 'leagues', code), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (!isSaving) {
+      S = { mode: data.mode, players: data.players, teams: data.teams, rounds: data.rounds, schedule: data.schedule, results: data.results };
+      adminPin = data.adminPin || null;
+      renderSchedule();
+      renderStandings();
+      updateBanner();
+      setSyncStatus('synced');
+    }
+  }, (err) => { setSyncStatus('error'); console.error(err); });
+}
+
+async function loadHistory() {
+  const cont = document.getElementById('history-list');
+  cont.innerHTML = '<p class="muted" style="padding:1rem;">Loading history…</p>';
+  try {
+    const q = query(collection(db, 'history'), orderBy('completedAt', 'desc'));
+    const snap = await getDocs(q);
+    if (snap.empty) { cont.innerHTML = '<p class="muted" style="padding:1rem 0;">No completed tournaments yet.</p>'; return; }
+    cont.innerHTML = '';
+    snap.forEach(docSnap => cont.appendChild(buildHistoryCard(docSnap.data())));
+  } catch(e) {
+    cont.innerHTML = '<p class="muted" style="padding:1rem 0;">Could not load history. Check connection.</p>';
+    console.error(e);
+  }
+}
+
+function buildHistoryCard(d) {
+  const totalM = d.schedule.reduce((s, r) => s + r.length, 0);
+  const doneM = Object.values(d.results).filter(r => r.done).length;
+  const standings = d.standings || calcStandings(d);
+  const top3 = standings.slice(0, 3);
+  const medals = ['🥇', '🥈', '🥉'];
+  const card = document.createElement('div');
+  card.className = 'history-card';
+  card.innerHTML = `
+    <div class="history-header">
+      <div>
+        <div class="history-date">${formatDate(d.completedAt)}</div>
+        <div class="history-meta">
+          <span class="hbadge ${d.mode==='fixed'?'tag-fixed':'tag-rotate'}">${d.mode==='fixed'?'Fixed':'Rotating'}</span>
+          <span class="history-sub">${d.players.length} players · ${d.rounds} rounds · ${doneM}/${totalM} matches</span>
+        </div>
+      </div>
+      <span class="history-code">${d.leagueCode}</span>
+    </div>
+    <div class="history-podium">
+      ${top3.map((s,i) => `
+        <div class="podium-item">
+          <span class="medal">${medals[i]}</span>
+          <span class="podium-name">${s.name}</span>
+          <span class="podium-pts">${s.pts} pts</span>
+          ${d.mode==='fixed'&&s.players?`<span class="podium-players">${s.players.join(' & ')}</span>`:''}
+        </div>`).join('')}
+    </div>
+    <button class="btn-expand" onclick="toggleHistoryDetail(this,'${d.leagueCode}')">View full standings ▾</button>
+    <div class="history-detail" id="detail-${d.leagueCode}" style="display:none;">
+      <table class="stbl" style="margin-top:10px;">
+        <thead><tr><th>#</th><th>${d.mode==='fixed'?'Team':'Player'}</th>${d.mode==='fixed'?'<th>Players</th>':''}<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th></tr></thead>
+        <tbody>${standings.map((s,i)=>`<tr>
+          <td><span class="rank-badge ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td>
+          <td style="font-weight:500;">${s.name}</td>
+          ${d.mode==='fixed'?`<td class="td-muted">${(s.players||[]).join(' & ')}</td>`:''}
+          <td>${s.played}</td><td class="td-win">${s.wins}</td><td class="td-loss">${s.losses}</td>
+          <td style="font-weight:500;">${s.pts}</td>
+          <td class="${s.diff>=0?'td-win':'td-loss'}">${s.diff>=0?'+':''}${s.diff}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  return card;
+}
+
+function toggleHistoryDetail(btn, code) {
+  const detail = document.getElementById('detail-' + code);
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : 'block';
+  btn.textContent = isOpen ? 'View full standings ▾' : 'Hide standings ▴';
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────────
+
+async function joinLeague() {
+  const input = document.getElementById('join-code');
+  const errEl = document.getElementById('join-err');
+  const code = input.value.trim().toUpperCase();
+  errEl.textContent = '';
+  if (!code) { errEl.textContent = 'Enter a league code.'; return; }
+  try {
+    const snap = await getDoc(doc(db, 'leagues', code));
+    if (!snap.exists()) { errEl.textContent = `No league found with code "${code}".`; return; }
+    const data = snap.data();
+    S = { mode: data.mode, players: data.players, teams: data.teams, rounds: data.rounds, schedule: data.schedule, results: data.results };
+    adminPin = data.adminPin || null;
+    leagueCode = code;
+    activeRound = 0;
+    localStorage.setItem('pickleball_last_code', code);
+
+    // Check session for saved admin status
+    const savedPin = sessionStorage.getItem('pk_admin_' + code);
+    if (savedPin && savedPin === adminPin) {
+      setAdminMode(true);
+    } else {
+      setAdminMode(false);
+    }
+
+    showLeagueUI();
+    subscribeToLeague(code);
+    renderSchedule();
+    renderStandings();
+    updateBanner();
+    gotoTab('schedule', document.getElementById('nav-schedule'));
+    showToast('Joined league ' + code, 'link');
+  } catch(e) {
+    errEl.textContent = 'Error connecting. Check your internet.';
+    console.error(e);
+  }
+}
+
+function showLeagueUI() {
+  document.getElementById('reset-btn').style.display = '';
+  document.getElementById('saved-banner').style.display = '';
+  document.getElementById('share-box').style.display = '';
+  document.getElementById('league-code-display').textContent = leagueCode;
+  setSyncStatus('synced');
+  updateBanner();
+}
+
+function updateBanner() {
+  const total = S.schedule.reduce((s, r) => s + r.length, 0);
+  const done = Object.values(S.results).filter(r => r.done).length;
+  const el = document.getElementById('saved-banner-text');
+  if (el) el.textContent = `League ${leagueCode} · ${done}/${total} matches · syncing live.`;
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(leagueCode).then(() => showToast('Code copied! Share with players', 'link')).catch(() => showToast('Code: ' + leagueCode, 'link'));
 }
 
 function confirmReset() {
-  if (confirm('Reset the league? All scores and setup will be cleared.')) {
-    localStorage.removeItem(STORAGE_KEY);
+  if (!isAdmin) { showToast('Admin PIN required to reset', 'error'); return; }
+  if (confirm('Reset the league? All scores will be cleared from all devices.')) {
+    if (unsubscribe) unsubscribe();
+    leagueCode = null; adminPin = null;
     S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
     activeRound = 0;
-    window.history.replaceState(null, '', window.location.pathname);
+    localStorage.removeItem('pickleball_last_code');
     document.getElementById('reset-btn').style.display = 'none';
     document.getElementById('saved-banner').style.display = 'none';
     document.getElementById('share-box').style.display = 'none';
+    document.getElementById('join-code').value = '';
+    setSyncStatus('');
+    setAdminMode(false);
     refreshPlayerInputs();
     document.getElementById('matches-list').innerHTML = '';
     document.getElementById('standings-body').innerHTML = '';
@@ -82,6 +376,7 @@ function gotoTab(t, btn) {
   (btn || document.getElementById('nav-' + t)).classList.add('active');
   if (t === 'standings') renderStandings();
   if (t === 'schedule') renderSchedule();
+  if (t === 'history') loadHistory();
 }
 
 function selectMode(m) {
@@ -108,14 +403,7 @@ function refreshPlayerInputs() {
   }
 }
 
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+// ── League Generation ─────────────────────────────────────────────────────────
 
 function generateLeague() {
   const n = parseInt(document.getElementById('inp-n').value) || 6;
@@ -124,40 +412,33 @@ function generateLeague() {
   errEl.textContent = '';
   if (n < 4 || n % 2 !== 0) { errEl.textContent = 'Need an even number of players (min 4).'; return; }
   if (rounds < 1) { errEl.textContent = 'Need at least 1 round.'; return; }
-  const players = [];
-  for (let i = 0; i < n; i++) {
-    players.push((document.getElementById('pi' + i)?.value || '').trim() || `Player ${i + 1}`);
-  }
-  S.players = players;
-  S.rounds = rounds;
-  S.results = {};
-  if (S.mode === 'fixed') generateFixed(players, rounds);
-  else generateRotating(players, rounds);
-  activeRound = 0;
-  saveState();
-  document.getElementById('reset-btn').style.display = '';
-  document.getElementById('saved-banner').style.display = '';
-  document.getElementById('share-box').style.display = '';
-  updateBanner();
-  updateShareURL();
-  renderSchedule();
-  renderStandings();
-  gotoTab('schedule', document.getElementById('nav-schedule'));
-}
 
-function updateBanner() {
-  const total = S.schedule.reduce((s, r) => s + r.length, 0);
-  const done = Object.values(S.results).filter(r => r.done).length;
-  const el = document.getElementById('saved-banner-text');
-  if (el) el.textContent = `League in progress · ${done}/${total} matches saved · share the link to view on any device.`;
+  showPinModal('create', async (pin) => {
+    const players = [];
+    for (let i = 0; i < n; i++) players.push((document.getElementById('pi' + i)?.value || '').trim() || `Player ${i + 1}`);
+    S.players = players; S.rounds = rounds; S.results = {};
+    if (S.mode === 'fixed') generateFixed(players, rounds);
+    else generateRotating(players, rounds);
+    activeRound = 0;
+    adminPin = pin;
+    leagueCode = generateCode();
+    setAdminMode(true);
+    sessionStorage.setItem('pk_admin_' + leagueCode, pin);
+    showLeagueUI();
+    await saveToFirebase();
+    subscribeToLeague(leagueCode);
+    renderSchedule();
+    renderStandings();
+    gotoTab('schedule', document.getElementById('nav-schedule'));
+    showToast('League created! PIN: ' + pin, 'link');
+  });
 }
 
 function generateFixed(players, rounds) {
   const shuffled = shuffle(players);
   const teams = [];
-  for (let i = 0; i < shuffled.length; i += 2) {
+  for (let i = 0; i < shuffled.length; i += 2)
     teams.push({ id: i / 2, name: `T${i / 2 + 1}`, players: [shuffled[i], shuffled[i + 1]] });
-  }
   S.teams = teams;
   S.schedule = buildRRSchedule(teams.map(t => t.id), rounds);
   S.schedule.forEach(r => r.forEach(m => { S.results[m.id] = { s1: '', s2: '', done: false }; }));
@@ -195,9 +476,8 @@ function buildRotatingSchedule(players, rounds) {
   for (let r = 0; r < rounds; r++) {
     const shuffled = shuffle([...Array(n).keys()]);
     const pairs = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
+    for (let i = 0; i < shuffled.length; i += 2)
       if (shuffled[i + 1] !== undefined) pairs.push([shuffled[i], shuffled[i + 1]]);
-    }
     const used = new Set(), roundMatches = [], pOrder = shuffle([...Array(pairs.length).keys()]);
     for (let i = 0; i < pOrder.length; i++) {
       if (used.has(pOrder[i])) continue;
@@ -221,13 +501,12 @@ function buildRotatingSchedule(players, rounds) {
   return schedule;
 }
 
+// ── Score ─────────────────────────────────────────────────────────────────────
+
 function getTeamLabel(match, side) {
   if (match.type === 'rotate') {
     const pair = side === 1 ? match.t1pair : match.t2pair;
-    return {
-      name: `${S.players[pair[0]]?.split(' ')[0]} & ${S.players[pair[1]]?.split(' ')[0]}`,
-      players: [S.players[pair[0]], S.players[pair[1]]]
-    };
+    return { name: `${S.players[pair[0]]?.split(' ')[0]} & ${S.players[pair[1]]?.split(' ')[0]}`, players: [S.players[pair[0]], S.players[pair[1]]] };
   }
   const t = S.teams[side === 1 ? match.t1 : match.t2];
   return { name: t.name, players: t.players };
@@ -243,25 +522,30 @@ function getWinner(mid) {
 }
 
 function validateScore(s1, s2) {
-  if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) return 'Enter valid scores.';
-  if (s1 === s2) return 'Scores cannot be tied.';
-  if (Math.max(s1,s2) < 11) return `Winner needs at least 11 pts (max: ${Math.max(s1,s2)}).`;
-  if (Math.abs(s1-s2) < 2) return `Need 2-point lead (diff: ${Math.abs(s1-s2)}).`;
+  if (isNaN(s1)||isNaN(s2)||s1<0||s2<0) return 'Enter valid scores.';
+  if (s1===s2) return 'Scores cannot be tied.';
+  if (Math.max(s1,s2)<11) return `Winner needs at least 11 pts (max: ${Math.max(s1,s2)}).`;
+  if (Math.abs(s1-s2)<2) return `Need 2-point lead (diff: ${Math.abs(s1-s2)}).`;
   return null;
 }
 
-function submitScore(mid) {
+async function submitScore(mid) {
+  if (!isAdmin) {
+    showToast('Enter admin PIN to add scores', 'error');
+    promptAdminPin();
+    return;
+  }
   const s1 = parseInt(document.getElementById('s1-' + mid)?.value);
   const s2 = parseInt(document.getElementById('s2-' + mid)?.value);
   const err = validateScore(s1, s2);
-  const errEl = document.getElementById('err-' + mid);
-  if (err) { errEl.textContent = err; return; }
+  if (err) { document.getElementById('err-' + mid).textContent = err; return; }
   S.results[mid] = { s1, s2, done: true };
-  saveState();
   updateBanner();
-  updateShareURL();
+  await saveToFirebase();
   renderSchedule();
 }
+
+// ── Render ────────────────────────────────────────────────────────────────────
 
 function renderSchedule() {
   const tabs = document.getElementById('round-tabs');
@@ -273,14 +557,25 @@ function renderSchedule() {
     b.onclick = () => { activeRound = ri; renderSchedule(); };
     tabs.appendChild(b);
   });
+
   const cont = document.getElementById('matches-list');
   cont.innerHTML = '';
   const round = S.schedule[activeRound];
   if (!round || !round.length) { cont.innerHTML = '<p class="muted">No matches this round.</p>'; return; }
-  const note = S.mode === 'rotate'
-    ? `<div class="warn-box">Rotating partners — new pairs each round. Players ranked individually in standings.</div>`
-    : `<div class="info-box">Fixed partners — same teams throughout all rounds.</div>`;
-  cont.innerHTML = note;
+
+  // Access bar
+  const accessBar = document.createElement('div');
+  accessBar.className = isAdmin ? 'access-bar admin' : 'access-bar viewer';
+  accessBar.innerHTML = isAdmin
+    ? `<span>🔓 Admin mode — you can enter scores</span>`
+    : `<span>👁 View only — <button class="btn-unlock" onclick="promptAdminPin()">Enter PIN to add scores</button></span>`;
+  cont.appendChild(accessBar);
+
+  const note = document.createElement('div');
+  note.className = S.mode === 'rotate' ? 'warn-box' : 'info-box';
+  note.textContent = S.mode === 'rotate' ? 'Rotating partners — new pairs each round.' : 'Fixed partners — same teams throughout.';
+  cont.appendChild(note);
+
   round.forEach(match => {
     const res = S.results[match.id];
     const t1 = getTeamLabel(match, 1), t2 = getTeamLabel(match, 2);
@@ -290,32 +585,37 @@ function renderSchedule() {
     mc.innerHTML = `
       <div class="match-header">
         <span class="match-label">Match · ${match.id}</span>
-        <span class="pill ${res.done ? 'pill-done' : 'pill-pend'}">${res.done ? 'completed' : 'pending'}</span>
+        <span class="pill ${res.done?'pill-done':'pill-pend'}">${res.done?'completed':'pending'}</span>
       </div>
       <div class="match-grid">
         <div class="team-box">
-          <div class="team-name">${t1.name} ${winner === 1 ? '<span class="win-tag">winner</span>' : ''}</div>
+          <div class="team-name">${t1.name} ${winner===1?'<span class="win-tag">winner</span>':''}</div>
           <div class="team-players">${t1.players.join(' & ')}</div>
         </div>
         <div class="vs-label">vs</div>
         <div class="team-box right">
-          <div class="team-name">${winner === 2 ? '<span class="win-tag">winner</span>' : ''} ${t2.name}</div>
+          <div class="team-name">${winner===2?'<span class="win-tag">winner</span>':''} ${t2.name}</div>
           <div class="team-players">${t2.players.join(' & ')}</div>
         </div>
       </div>
+      ${isAdmin && !res.done ? `
       <div class="score-row">
         <span class="score-label">${t1.name}</span>
         <input type="number" class="score-inp" min="0" max="99" value="${res.s1}" placeholder="0" id="s1-${match.id}"
-          oninput="S.results['${match.id}'].s1=this.value; document.getElementById('err-${match.id}').textContent='';">
+          oninput="S.results['${match.id}'].s1=this.value;document.getElementById('err-${match.id}').textContent='';">
         <span class="score-sep">—</span>
         <input type="number" class="score-inp" min="0" max="99" value="${res.s2}" placeholder="0" id="s2-${match.id}"
-          oninput="S.results['${match.id}'].s2=this.value; document.getElementById('err-${match.id}').textContent='';">
+          oninput="S.results['${match.id}'].s2=this.value;document.getElementById('err-${match.id}').textContent='';">
         <span class="score-label">${t2.name}</span>
-        <button class="btn-save" onclick="submitScore('${match.id}')" ${res.done ? 'disabled' : ''}>
-          ${res.done ? 'saved ✓' : 'save'}
-        </button>
+        <button class="btn-save" onclick="submitScore('${match.id}')">save</button>
       </div>
       <div id="err-${match.id}" class="match-err"></div>
+      ` : res.done ? `
+      <div class="score-display">
+        <span class="score-num ${winner===1?'score-win':''}">${res.s1}</span>
+        <span class="score-sep-display">—</span>
+        <span class="score-num ${winner===2?'score-win':''}">${res.s2}</span>
+      </div>` : `<div class="score-pending-msg">Score not entered yet</div>`}
     `;
     cont.appendChild(mc);
   });
@@ -327,102 +627,52 @@ function renderStandings() {
   const totalM = S.schedule.reduce((s, r) => s + r.length, 0);
   const doneM = Object.values(S.results).filter(r => r.done).length;
   const allDone = doneM === totalM && totalM > 0;
-  if (S.mode === 'fixed') renderFixedStandings(cont, allDone, doneM, totalM);
-  else renderRotatingStandings(cont, allDone, doneM, totalM);
-}
-
-function renderFixedStandings(cont, allDone, doneM, totalM) {
-  const stats = S.teams.map(t => ({ team: t, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0 }));
-  S.schedule.forEach(r => r.forEach(m => {
-    const res = S.results[m.id];
-    if (!res?.done) return;
-    const s1 = parseInt(res.s1), s2 = parseInt(res.s2);
-    const st1 = stats[m.t1], st2 = stats[m.t2];
-    st1.played++; st2.played++; st1.scored += s1; st1.conceded += s2; st2.scored += s2; st2.conceded += s1;
-    if (s1 > s2) { st1.wins++; st1.pts += 2; st2.losses++; } else { st2.wins++; st2.pts += 2; st1.losses++; }
-  }));
-  stats.forEach(s => s.diff = s.scored - s.conceded);
-  stats.sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
+  const standings = calcStandings(S);
+  const isFixed = S.mode === 'fixed';
   cont.innerHTML = `
     <div class="grid4">
-      <div class="metric"><div class="metric-val">${S.teams.length}</div><div class="metric-lbl">Teams</div></div>
-      <div class="metric"><div class="metric-val">${S.rounds}</div><div class="metric-lbl">Rounds</div></div>
-      <div class="metric"><div class="metric-val">${doneM}/${totalM}</div><div class="metric-lbl">Done</div></div>
-      <div class="metric"><div class="metric-val">${allDone ? 'Final' : 'Live'}</div><div class="metric-lbl">Status</div></div>
-    </div>
-    ${allDone ? '<div class="info-box">All matches complete — final standings.</div>' : ''}
-    <div class="card" style="padding:0;overflow:hidden;">
-      <div class="standings-wrap">
-        <table class="stbl">
-          <thead><tr><th>#</th><th>Team</th><th>Players</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>
-          <tbody>${stats.map((s, i) => `<tr>
-            <td><span class="rank-badge ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td>
-            <td style="font-weight:500;">${s.team.name}</td>
-            <td class="td-muted">${s.team.players.join(' & ')}</td>
-            <td>${s.played}</td>
-            <td class="td-win">${s.wins}</td>
-            <td class="td-loss">${s.losses}</td>
-            <td style="font-weight:500;">${s.pts}</td>
-            <td class="${s.diff>=0?'td-win':'td-loss'}">${s.diff>=0?'+':''}${s.diff}</td>
-            <td>${s.scored}</td>
-          </tr>`).join('')}</tbody>
-        </table>
-      </div>
-    </div>
-    <p class="tiebreak-note">Tiebreakers: league points → score diff → total scored</p>`;
-}
-
-function renderRotatingStandings(cont, allDone, doneM, totalM) {
-  const stats = {};
-  S.players.forEach((p, i) => { stats[i] = { name: p, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0 }; });
-  S.schedule.forEach(r => r.forEach(m => {
-    const res = S.results[m.id];
-    if (!res?.done) return;
-    const s1 = parseInt(res.s1), s2 = parseInt(res.s2);
-    [m.t1pair[0], m.t1pair[1]].forEach(p => { stats[p].played++; stats[p].scored+=s1; stats[p].conceded+=s2; if(s1>s2){stats[p].wins++;stats[p].pts+=2;}else stats[p].losses++; });
-    [m.t2pair[0], m.t2pair[1]].forEach(p => { stats[p].played++; stats[p].scored+=s2; stats[p].conceded+=s1; if(s2>s1){stats[p].wins++;stats[p].pts+=2;}else stats[p].losses++; });
-  }));
-  const rows = Object.values(stats).map(s => ({ ...s, diff: s.scored - s.conceded }));
-  rows.sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
-  cont.innerHTML = `
-    <div class="grid4">
-      <div class="metric"><div class="metric-val">${S.players.length}</div><div class="metric-lbl">Players</div></div>
+      <div class="metric"><div class="metric-val">${isFixed?S.teams.length:S.players.length}</div><div class="metric-lbl">${isFixed?'Teams':'Players'}</div></div>
       <div class="metric"><div class="metric-val">${S.rounds}</div><div class="metric-lbl">Rounds</div></div>
       <div class="metric"><div class="metric-val">${doneM}/${totalM}</div><div class="metric-lbl">Done</div></div>
       <div class="metric"><div class="metric-val">${allDone?'Final':'Live'}</div><div class="metric-lbl">Status</div></div>
     </div>
-    <div class="warn-box">Rotating partners — individual player rankings.</div>
-    ${allDone ? '<div class="info-box">All matches complete — final standings.</div>' : ''}
+    ${!isFixed?'<div class="warn-box">Rotating partners — individual player rankings.</div>':''}
+    ${allDone?'<div class="info-box">🏆 All matches complete — saved to history!</div>':''}
     <div class="card" style="padding:0;overflow:hidden;">
-      <div class="standings-wrap">
-        <table class="stbl">
-          <thead><tr><th>#</th><th>Player</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>
-          <tbody>${rows.map((s,i) => `<tr>
-            <td><span class="rank-badge ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td>
-            <td style="font-weight:500;">${s.name}</td>
-            <td>${s.played}</td>
-            <td class="td-win">${s.wins}</td>
-            <td class="td-loss">${s.losses}</td>
-            <td style="font-weight:500;">${s.pts}</td>
-            <td class="${s.diff>=0?'td-win':'td-loss'}">${s.diff>=0?'+':''}${s.diff}</td>
-            <td>${s.scored}</td>
-          </tr>`).join('')}</tbody>
-        </table>
-      </div>
+      <div class="standings-wrap"><table class="stbl">
+        <thead><tr><th>#</th><th>${isFixed?'Team':'Player'}</th>${isFixed?'<th>Players</th>':''}<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>
+        <tbody>${standings.map((s,i)=>`<tr>
+          <td><span class="rank-badge ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td>
+          <td style="font-weight:500;">${s.name}</td>
+          ${isFixed?`<td class="td-muted">${(s.players||[]).join(' & ')}</td>`:''}
+          <td>${s.played}</td><td class="td-win">${s.wins}</td><td class="td-loss">${s.losses}</td>
+          <td style="font-weight:500;">${s.pts}</td>
+          <td class="${s.diff>=0?'td-win':'td-loss'}">${s.diff>=0?'+':''}${s.diff}</td>
+          <td>${s.scored}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
     </div>
     <p class="tiebreak-note">Tiebreakers: league points → score diff → total scored</p>`;
 }
 
-const loaded = loadState();
-if (loaded && S.teams.length) {
-  document.getElementById('reset-btn').style.display = '';
-  document.getElementById('saved-banner').style.display = '';
-  document.getElementById('share-box').style.display = '';
-  updateBanner();
-  updateShareURL();
-  refreshPlayerInputs();
-  renderSchedule();
-  renderStandings();
+// ── Expose globals ────────────────────────────────────────────────────────────
+window.gotoTab = gotoTab;
+window.selectMode = selectMode;
+window.refreshPlayerInputs = refreshPlayerInputs;
+window.generateLeague = generateLeague;
+window.joinLeague = joinLeague;
+window.submitScore = submitScore;
+window.confirmReset = confirmReset;
+window.copyCode = copyCode;
+window.toggleHistoryDetail = toggleHistoryDetail;
+window.promptAdminPin = promptAdminPin;
+window.S = S;
+
+// ── Auto-rejoin ───────────────────────────────────────────────────────────────
+const lastCode = localStorage.getItem('pickleball_last_code');
+if (lastCode) {
+  document.getElementById('join-code').value = lastCode;
+  joinLeague();
 } else {
   refreshPlayerInputs();
 }

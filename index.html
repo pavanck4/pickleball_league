@@ -3,50 +3,95 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pickleball League Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<title>CourtIQ — Pickleball League Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- PIN MODAL -->
+<div id="pin-overlay" class="pin-overlay" style="display:none;">
+  <div class="pin-modal">
+    <div class="pin-icon">🔐</div>
+    <h3 id="pin-modal-title">Enter admin PIN</h3>
+    <p id="pin-modal-desc" class="pin-desc">Enter the 4-digit PIN to unlock score entry.</p>
+    <input type="number" id="pin-input" class="pin-input" placeholder="••••" maxlength="4" inputmode="numeric">
+    <div id="pin-err" class="err-msg" style="text-align:center;min-height:16px;"></div>
+    <div class="pin-btn-row">
+      <button class="btn-outline" id="pin-cancel-btn">Cancel</button>
+      <button class="btn-primary" id="pin-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div class="app">
+
+  <!-- HEADER -->
   <div class="header">
     <div class="header-inner">
-      <div class="logo">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="13" stroke="#1D9E75" stroke-width="1.5"/><path d="M7 14c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/><circle cx="14" cy="17" r="3" fill="#1D9E75"/></svg>
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8" stroke="white" stroke-width="1.5"/>
+            <path d="M4 10c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="10" cy="12.5" r="2.5" fill="white"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>CourtIQ</h1>
+          <div class="tagline">Pickleball League Manager</div>
+        </div>
       </div>
-      <div style="flex:1;">
-        <h1>Pickleball League</h1>
-        <p class="subtitle">Round Robin Tournament Manager</p>
+      <div class="header-right">
+        <span class="sync-status" id="sync-status"></span>
+        <span class="admin-badge" id="admin-badge" style="display:none;">🔓 Admin</span>
+        <button class="btn-danger" id="reset-btn" onclick="confirmReset()" style="display:none;">Reset</button>
       </div>
-      <button class="btn-danger" id="reset-btn" onclick="confirmReset()" style="display:none;">Reset league</button>
     </div>
   </div>
 
-  <div class="container">
+  <!-- NAV -->
+  <div class="nav-wrap">
     <nav class="nav">
-      <button class="nav-btn active" id="nav-setup" onclick="gotoTab('setup',this)">Setup</button>
-      <button class="nav-btn" id="nav-schedule" onclick="gotoTab('schedule',this)">Schedule</button>
-      <button class="nav-btn" id="nav-standings" onclick="gotoTab('standings',this)">Standings</button>
+      <button class="nav-btn active" id="nav-setup"     onclick="gotoTab('setup',this)">Setup</button>
+      <button class="nav-btn"        id="nav-schedule"  onclick="gotoTab('schedule',this)">Schedule</button>
+      <button class="nav-btn"        id="nav-standings" onclick="gotoTab('standings',this)">Standings</button>
+      <button class="nav-btn"        id="nav-history"   onclick="gotoTab('history',this)">History</button>
     </nav>
+  </div>
+
+  <div class="container">
 
     <!-- SETUP TAB -->
     <div id="tab-setup" class="section active">
 
-      <div id="saved-banner" class="storage-banner" style="display:none;">
-        <div class="storage-dot"></div>
-        <span id="saved-banner-text">League in progress — share the link to view on any device.</span>
+      <div class="card">
+        <h3>Join an existing league</h3>
+        <p style="font-size:13px;color:#5a5a56;margin-bottom:12px;">Have a league code? Enter it to view live scores on any device.</p>
+        <div class="join-row">
+          <input type="text" id="join-code" placeholder="e.g. PK-4829" style="text-transform:uppercase;letter-spacing:3px;font-weight:500;">
+          <button class="btn-primary" onclick="joinLeague()">Join</button>
+        </div>
+        <div id="join-err" class="err-msg" style="margin-top:6px;margin-bottom:0;"></div>
       </div>
 
-      <!-- SHARE BOX -->
+      <div class="divider-or"><span>or create a new league</span></div>
+
+      <div id="saved-banner" class="storage-banner" style="display:none;">
+        <div class="storage-dot"></div>
+        <span id="saved-banner-text">League active — syncing live across all devices.</span>
+      </div>
+
       <div id="share-box" class="share-box" style="display:none;">
         <div class="share-label">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          Share league link — opens with all scores on any device
+          Share league code — anyone can join and view live scores
         </div>
-        <div class="share-row">
-          <input type="text" id="share-url" readonly placeholder="Your share link appears here..." onclick="this.select()">
-          <button class="btn-copy" onclick="copyShareURL()">Copy link</button>
+        <div class="code-display">
+          <span id="league-code-display" style="font-size:28px;font-weight:600;letter-spacing:6px;color:#0C447C;font-family:'DM Serif Display',serif;"></span>
+          <button class="btn-copy" onclick="copyCode()">Copy code</button>
         </div>
+        <p style="font-size:12px;color:#6b8eab;margin-top:8px;">Share the admin PIN separately with players who will enter scores.</p>
       </div>
 
       <div class="card">
@@ -60,7 +105,7 @@
           <div class="mode-card" id="mc-rotate" onclick="selectMode('rotate')">
             <span class="mode-tag tag-rotate">Rotating partners</span>
             <div class="mode-title">Rotating partners</div>
-            <div class="mode-desc">Partners change each round. Everyone is ranked individually based on their cumulative results.</div>
+            <div class="mode-desc">Partners change each round. Everyone is ranked individually based on cumulative results.</div>
           </div>
         </div>
       </div>
@@ -85,7 +130,7 @@
       </div>
 
       <div id="setup-err" class="err-msg"></div>
-      <button class="btn-primary" onclick="generateLeague()">Generate league</button>
+      <button class="btn-primary" onclick="generateLeague()">Generate league →</button>
     </div>
 
     <!-- SCHEDULE TAB -->
@@ -98,10 +143,32 @@
     <div id="tab-standings" class="section">
       <div id="standings-body"></div>
     </div>
+
+    <!-- HISTORY TAB -->
+    <div id="tab-history" class="section">
+      <div class="page-title">
+        <h2>Tournament History</h2>
+        <p>All completed leagues — saved automatically to the cloud.</p>
+      </div>
+      <div id="history-list"></div>
+    </div>
+
   </div>
+
+  <!-- WATERMARK -->
+  <div class="watermark">
+    <div class="watermark-logo">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <circle cx="5" cy="5" r="4" stroke="white" stroke-width="1"/>
+        <circle cx="5" cy="6" r="1.5" fill="white"/>
+      </svg>
+    </div>
+    <span>Powered by <strong>CourtIQ</strong> — by Pavan</span>
+  </div>
+
 </div>
 
 <div class="toast" id="toast">✓ Saved</div>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

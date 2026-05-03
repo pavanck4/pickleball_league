@@ -161,12 +161,14 @@ async function saveToFirebase() {
   if (!leagueCode || isSaving) return;
   isSaving = true;
   setSyncStatus('saving');
-  try {
-    const totalM = S.schedule.reduce((s, r) => s + r.length, 0);
-    const doneM = Object.values(S.results).filter(r => r.done).length;
-    const isComplete = doneM === totalM && totalM > 0;
-    const standings = calcStandings(S);
 
+  const totalM = S.schedule.reduce((s, r) => s + r.length, 0);
+  const doneM = Object.values(S.results).filter(r => r.done).length;
+  const isComplete = doneM === totalM && totalM > 0;
+  const standings = calcStandings(S);
+
+  // Step 1: Save league
+  try {
     await setDoc(doc(db, 'leagues', leagueCode), {
       ...S,
       leagueCode,
@@ -175,9 +177,23 @@ async function saveToFirebase() {
       standings,
       updatedAt: serverTimestamp()
     }, { merge: true });
+    setSyncStatus('synced');
+    localStorage.setItem('pickleball_last_code', leagueCode);
+  } catch(e) {
+    setSyncStatus('error');
+    showToast('Save failed — check connection', 'error');
+    console.error('League save error:', e);
+    isSaving = false;
+    return;
+  }
 
-    if (isComplete) {
-      await setDoc(doc(db, 'history', leagueCode), {
+  // Step 2: Save to history separately (only when complete)
+  if (isComplete) {
+    try {
+      // Check if history entry already exists to preserve createdAt
+      const histRef = doc(db, 'history', leagueCode);
+      const existing = await getDoc(histRef);
+      const histData = {
         leagueCode,
         mode: S.mode,
         players: S.players,
@@ -188,22 +204,23 @@ async function saveToFirebase() {
         standings,
         isComplete: true,
         completedAt: serverTimestamp(),
-        createdAt: serverTimestamp()
-      }, { merge: true });
-      showToast('League complete — saved to history!');
-    } else {
-      showToast('Saved');
+      };
+      if (!existing.exists()) {
+        histData.createdAt = serverTimestamp();
+      }
+      await setDoc(histRef, histData, { merge: true });
+      showToast('🏆 League complete — saved to history!');
+      console.log('History saved for', leagueCode);
+    } catch(e) {
+      // League saved OK but history failed — show specific error
+      showToast('Scores saved but history failed — check rules', 'error');
+      console.error('History save error:', e);
     }
-
-    setSyncStatus('synced');
-    localStorage.setItem('pickleball_last_code', leagueCode);
-  } catch(e) {
-    setSyncStatus('error');
-    showToast('Save failed — check connection', 'error');
-    console.error(e);
-  } finally {
-    isSaving = false;
+  } else {
+    showToast('Saved');
   }
+
+  isSaving = false;
 }
 
 function subscribeToLeague(code) {

@@ -125,7 +125,20 @@
       </div>
 
       <div class="card">
-        <h3>Player names</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin-bottom:0;">Player names</h3>
+          <button class="btn-save-group" onclick="saveCurrentAsGroup()">＋ Save as group</button>
+        </div>
+
+        <!-- Saved groups -->
+        <div id="groups-wrap" style="display:none;margin-bottom:12px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="groups-dropdown" class="groups-select" onchange="if(this.value!=='') loadGroup(parseInt(this.value))">
+              <option value="">Load a saved group…</option>
+            </select>
+          </div>
+        </div>
+
         <div id="player-inputs"></div>
       </div>
 

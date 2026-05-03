@@ -444,12 +444,77 @@ function selectMode(m) {
   refreshPlayerInputs();
 }
 
-function refreshPlayerInputs() {
+// ── Player Groups ─────────────────────────────────────────────────────────────
+
+const GROUPS_KEY = 'courtiq_player_groups';
+
+function loadGroups() {
+  try { return JSON.parse(localStorage.getItem(GROUPS_KEY)) || []; } catch(e) { return []; }
+}
+
+function saveGroups(groups) {
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+}
+
+function saveCurrentAsGroup() {
+  const n = parseInt(document.getElementById('inp-n').value) || 6;
+  const players = [];
+  for (let i = 0; i < n; i++) {
+    const v = (document.getElementById('pi' + i)?.value || '').trim();
+    if (v) players.push(v);
+  }
+  if (players.length < 4) { showToast('Enter at least 4 player names first', 'error'); return; }
+  const name = prompt('Name this group (e.g. "Tuesday Gang", "Office Group"):');
+  if (!name?.trim()) return;
+  const groups = loadGroups();
+  groups.unshift({ name: name.trim(), players, savedAt: new Date().toISOString() });
+  saveGroups(groups.slice(0, 10)); // keep max 10 groups
+  renderGroupsDropdown();
+  showToast('Group "' + name.trim() + '" saved!');
+}
+
+function loadGroup(idx) {
+  const groups = loadGroups();
+  const group = groups[idx];
+  if (!group) return;
+  // Set player count
+  const n = group.players.length % 2 === 0 ? group.players.length : group.players.length + 1;
+  document.getElementById('inp-n').value = n;
+  refreshPlayerInputs(group.players);
+  showToast('Loaded group: ' + group.name, 'link');
+  document.getElementById('groups-dropdown').value = '';
+}
+
+function deleteGroup(idx) {
+  const groups = loadGroups();
+  const name = groups[idx]?.name;
+  if (!confirm('Delete group "' + name + '"?')) return;
+  groups.splice(idx, 1);
+  saveGroups(groups);
+  renderGroupsDropdown();
+  showToast('Group deleted');
+}
+
+function renderGroupsDropdown() {
+  const groups = loadGroups();
+  const wrap = document.getElementById('groups-wrap');
+  const sel = document.getElementById('groups-dropdown');
+  if (!wrap || !sel) return;
+  if (groups.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  sel.innerHTML = '<option value="">Load a saved group…</option>' +
+    groups.map((g, i) => `<option value="${i}">${g.name} (${g.players.length} players)</option>`).join('');
+}
+
+function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
   if (n % 2 !== 0) n++;
   n = Math.max(4, Math.min(20, n));
   const cont = document.getElementById('player-inputs');
-  const existing = Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
+  const existing = preload || Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
   cont.innerHTML = '';
   for (let i = 0; i < n; i++) {
     const row = document.createElement('div');
@@ -774,6 +839,9 @@ async function forceSaveHistory() {
 window.gotoTab = gotoTab;
 window.selectMode = selectMode;
 window.refreshPlayerInputs = refreshPlayerInputs;
+window.saveCurrentAsGroup = saveCurrentAsGroup;
+window.loadGroup = loadGroup;
+window.deleteGroup = deleteGroup;
 window.generateLeague = generateLeague;
 window.joinLeague = joinLeague;
 window.submitScore = submitScore;
@@ -792,3 +860,4 @@ if (lastCode) {
 } else {
   refreshPlayerInputs();
 }
+renderGroupsDropdown();

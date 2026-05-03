@@ -532,3 +532,37 @@ input:focus {
   .nav { padding: 0 1rem; }
   .nav-btn { padding: 10px 12px; font-size: 12px; }
 }
+
+/* ── Player Groups ── */
+.btn-save-group {
+  background: transparent;
+  color: var(--green-dark);
+  border: 0.5px solid var(--green);
+  border-radius: var(--radius-md);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.btn-save-group:hover { background: var(--green-light); }
+
+.groups-select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+.groups-select:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(29,158,117,0.12);
+}

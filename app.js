@@ -498,15 +498,22 @@ function deleteGroup(idx) {
 function renderGroupsDropdown() {
   const groups = loadGroups();
   const wrap = document.getElementById('groups-wrap');
-  const sel = document.getElementById('groups-dropdown');
-  if (!wrap || !sel) return;
+  const chipsEl = document.getElementById('groups-chips');
+  if (!wrap || !chipsEl) return;
   if (groups.length === 0) {
     wrap.style.display = 'none';
     return;
   }
   wrap.style.display = '';
-  sel.innerHTML = '<option value="">Load a saved group…</option>' +
-    groups.map((g, i) => `<option value="${i}">${g.name} (${g.players.length} players)</option>`).join('');
+  chipsEl.innerHTML = groups.map((g, i) => `
+    <div class="group-chip">
+      <button class="group-chip-load" onclick="loadGroup(${i})">
+        <span class="group-chip-name">${g.name}</span>
+        <span class="group-chip-count">${g.players.length} players</span>
+      </button>
+      <button class="group-chip-delete" onclick="deleteGroup(${i})" title="Delete group">✕</button>
+    </div>
+  `).join('');
 }
 
 function refreshPlayerInputs(preload) {

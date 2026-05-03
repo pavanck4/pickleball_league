@@ -125,21 +125,21 @@
       </div>
 
       <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <h3 style="margin-bottom:0;">Player names</h3>
-          <button class="btn-save-group" onclick="saveCurrentAsGroup()">＋ Save as group</button>
-        </div>
+        <h3 style="margin-bottom:12px;">Player names</h3>
 
-        <!-- Saved groups -->
-        <div id="groups-wrap" style="display:none;margin-bottom:12px;">
-          <div style="display:flex;gap:8px;align-items:center;">
-            <select id="groups-dropdown" class="groups-select" onchange="if(this.value!=='') loadGroup(parseInt(this.value))">
-              <option value="">Load a saved group…</option>
-            </select>
-          </div>
+        <!-- Saved groups — only shown when groups exist -->
+        <div id="groups-wrap" style="display:none;margin-bottom:14px;">
+          <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Saved groups</div>
+          <div id="groups-chips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
 
         <div id="player-inputs"></div>
+
+        <!-- Save group button — below players -->
+        <div style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border);">
+          <button class="btn-save-group" onclick="saveCurrentAsGroup()">＋ Save these players as a group</button>
+          <span style="font-size:12px;color:var(--text-tertiary);margin-left:8px;">so you don't have to retype next time</span>
+        </div>
       </div>
 
       <div id="setup-err" class="err-msg"></div>

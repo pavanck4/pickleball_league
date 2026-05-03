@@ -301,6 +301,8 @@ function buildHistoryCard(d) {
   const standings = d.standings || calcStandings({...d, schedule: sched});
   const top3 = standings.slice(0, 3);
   const medals = ['🥇', '🥈', '🥉'];
+  // Sanitize ID — hyphens in league codes break getElementById
+  const safeId = 'detail_' + (d.leagueCode || '').replace(/[^a-zA-Z0-9]/g, '_');
   const card = document.createElement('div');
   card.className = 'history-card';
   card.innerHTML = `
@@ -323,8 +325,8 @@ function buildHistoryCard(d) {
           ${d.mode==='fixed'&&s.players?`<span class="podium-players">${s.players.join(' & ')}</span>`:''}
         </div>`).join('')}
     </div>
-    <button class="btn-expand" onclick="toggleHistoryDetail(this,'${d.leagueCode}')">View full standings ▾</button>
-    <div class="history-detail" id="detail-${d.leagueCode}" style="display:none;">
+    <button class="btn-expand" onclick="toggleHistoryDetail(this,'${safeId}')">View full standings ▾</button>
+    <div class="history-detail" id="${safeId}" style="display:none;">
       <table class="stbl" style="margin-top:10px;">
         <thead><tr><th>#</th><th>${d.mode==='fixed'?'Team':'Player'}</th>${d.mode==='fixed'?'<th>Players</th>':''}<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th></tr></thead>
         <tbody>${standings.map((s,i)=>`<tr>
@@ -340,8 +342,9 @@ function buildHistoryCard(d) {
   return card;
 }
 
-function toggleHistoryDetail(btn, code) {
-  const detail = document.getElementById('detail-' + code);
+function toggleHistoryDetail(btn, safeId) {
+  const detail = document.getElementById(safeId);
+  if (!detail) { console.error('Detail element not found:', safeId); return; }
   const isOpen = detail.style.display !== 'none';
   detail.style.display = isOpen ? 'none' : 'block';
   btn.textContent = isOpen ? 'View full standings ▾' : 'Hide standings ▴';

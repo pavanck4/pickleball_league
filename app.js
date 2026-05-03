@@ -295,59 +295,77 @@ async function loadHistory() {
 }
 
 function buildHistoryCard(d) {
-  const sched = deserializeSchedule(d.schedule, d.rounds);
-  const totalM = sched.reduce((s, r) => s + r.length, 0);
-  const doneM = Object.values(d.results).filter(r => r.done).length;
-  const standings = d.standings || calcStandings({...d, schedule: sched});
-  const top3 = standings.slice(0, 3);
-  const medals = ['🥇', '🥈', '🥉'];
-  // Sanitize ID — hyphens in league codes break getElementById
-  const safeId = 'detail_' + (d.leagueCode || '').replace(/[^a-zA-Z0-9]/g, '_');
-  const card = document.createElement('div');
-  card.className = 'history-card';
-  card.innerHTML = `
-    <div class="history-header">
-      <div>
-        <div class="history-date">${formatDate(d.completedAt)}</div>
-        <div class="history-meta">
-          <span class="hbadge ${d.mode==='fixed'?'tag-fixed':'tag-rotate'}">${d.mode==='fixed'?'Fixed':'Rotating'}</span>
-          <span class="history-sub">${d.players.length} players · ${d.rounds} rounds · ${doneM}/${totalM} matches</span>
-        </div>
-      </div>
-      <span class="history-code">${d.leagueCode}</span>
-    </div>
-    <div class="history-podium">
-      ${top3.map((s,i) => `
-        <div class="podium-item">
-          <span class="medal">${medals[i]}</span>
-          <span class="podium-name">${s.name}</span>
-          <span class="podium-pts">${s.pts} pts</span>
-          ${d.mode==='fixed'&&s.players?`<span class="podium-players">${s.players.join(' & ')}</span>`:''}
-        </div>`).join('')}
-    </div>
-    <button class="btn-expand" onclick="toggleHistoryDetail(this,'${safeId}')">View full standings ▾</button>
-    <div class="history-detail" id="${safeId}" style="display:none;">
-      <table class="stbl" style="margin-top:10px;">
-        <thead><tr><th>#</th><th>${d.mode==='fixed'?'Team':'Player'}</th>${d.mode==='fixed'?'<th>Players</th>':''}<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th></tr></thead>
-        <tbody>${standings.map((s,i)=>`<tr>
-          <td><span class="rank-badge ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${i+1}</span></td>
-          <td style="font-weight:500;">${s.name}</td>
-          ${d.mode==='fixed'?`<td class="td-muted">${(s.players||[]).join(' & ')}</td>`:''}
-          <td>${s.played}</td><td class="td-win">${s.wins}</td><td class="td-loss">${s.losses}</td>
-          <td style="font-weight:500;">${s.pts}</td>
-          <td class="${s.diff>=0?'td-win':'td-loss'}">${s.diff>=0?'+':''}${s.diff}</td>
-        </tr>`).join('')}</tbody>
-      </table>
-    </div>`;
-  return card;
-}
+  var sched = deserializeSchedule(d.schedule, d.rounds);
+  var totalM = sched.reduce(function(s, r) { return s + r.length; }, 0);
+  var doneM = Object.values(d.results).filter(function(r) { return r.done; }).length;
+  var standings = d.standings || calcStandings(Object.assign({}, d, {schedule: sched}));
+  var top3 = standings.slice(0, 3);
+  var medals = ['🥇', '🥈', '🥉'];
+  var isFixed = d.mode === 'fixed';
 
-function toggleHistoryDetail(btn, safeId) {
-  const detail = document.getElementById(safeId);
-  if (!detail) { console.error('Detail element not found:', safeId); return; }
-  const isOpen = detail.style.display !== 'none';
-  detail.style.display = isOpen ? 'none' : 'block';
-  btn.textContent = isOpen ? 'View full standings ▾' : 'Hide standings ▴';
+  var card = document.createElement('div');
+  card.className = 'history-card';
+
+  var header = document.createElement('div');
+  header.className = 'history-header';
+  header.innerHTML = '<div><div class="history-date">' + formatDate(d.completedAt) + '</div>'
+    + '<div class="history-meta">'
+    + '<span class="hbadge ' + (isFixed ? 'tag-fixed' : 'tag-rotate') + '">' + (isFixed ? 'Fixed' : 'Rotating') + '</span>'
+    + '<span class="history-sub">' + d.players.length + ' players · ' + d.rounds + ' rounds · ' + doneM + '/' + totalM + ' matches</span>'
+    + '</div></div><span class="history-code">' + d.leagueCode + '</span>';
+  card.appendChild(header);
+
+  var podium = document.createElement('div');
+  podium.className = 'history-podium';
+  podium.innerHTML = top3.map(function(s, i) {
+    return '<div class="podium-item">'
+      + '<span class="medal">' + medals[i] + '</span>'
+      + '<span class="podium-name">' + s.name + '</span>'
+      + '<span class="podium-pts">' + s.pts + ' pts</span>'
+      + (isFixed && s.players ? '<span class="podium-players">' + s.players.join(' & ') + '</span>' : '')
+      + '</div>';
+  }).join('');
+  card.appendChild(podium);
+
+  var btn = document.createElement('button');
+  btn.className = 'btn-expand';
+  btn.textContent = 'View full standings ▾';
+  card.appendChild(btn);
+
+  var detail = document.createElement('div');
+  detail.className = 'history-detail';
+  detail.style.display = 'none';
+  var playersHeader = isFixed ? '<th>Players</th>' : '';
+  var rows = standings.map(function(s, i) {
+    var rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+    var diffClass = s.diff >= 0 ? 'td-win' : 'td-loss';
+    var diffStr = (s.diff >= 0 ? '+' : '') + s.diff;
+    var playersCol = isFixed ? '<td class="td-muted">' + (s.players||[]).join(' & ') + '</td>' : '';
+    return '<tr>'
+      + '<td><span class="rank-badge ' + rankClass + '">' + (i+1) + '</span></td>'
+      + '<td style="font-weight:500;">' + s.name + '</td>'
+      + playersCol
+      + '<td>' + s.played + '</td>'
+      + '<td class="td-win">' + s.wins + '</td>'
+      + '<td class="td-loss">' + s.losses + '</td>'
+      + '<td style="font-weight:500;">' + s.pts + '</td>'
+      + '<td class="' + diffClass + '">' + diffStr + '</td>'
+      + '<td>' + (s.scored||0) + '</td>'
+      + '</tr>';
+  }).join('');
+  detail.innerHTML = '<table class="stbl" style="margin-top:10px;"><thead><tr>'
+    + '<th>#</th><th>' + (isFixed ? 'Team' : 'Player') + '</th>' + playersHeader
+    + '<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  card.appendChild(detail);
+
+  btn.addEventListener('click', function() {
+    var isOpen = detail.style.display !== 'none';
+    detail.style.display = isOpen ? 'none' : 'block';
+    btn.textContent = isOpen ? 'View full standings ▾' : 'Hide standings ▴';
+  });
+
+  return card;
 }
 
 // ── UI ────────────────────────────────────────────────────────────────────────

@@ -468,17 +468,49 @@ function selectMode(m) {
 
 // ── Player Groups ─────────────────────────────────────────────────────────────
 
-const GROUPS_KEY = 'courtiq_player_groups';
+// ── Player Groups (Firebase-synced) ──────────────────────────────────────────
 
-function loadGroups() {
-  try { return JSON.parse(localStorage.getItem(GROUPS_KEY)) || []; } catch(e) { return []; }
+const GROUPS_DOC = 'courtiq_shared_groups';
+let cachedGroups = [];
+
+async function loadGroupsFromFirebase() {
+  // Load from local cache first for instant UI
+  try {
+    const local = JSON.parse(localStorage.getItem('courtiq_groups_cache'));
+    if (local && local.length > 0) {
+      cachedGroups = local;
+      renderGroupsDropdown();
+    }
+  } catch(e) {}
+
+  // Then fetch fresh from Firebase
+  try {
+    const snap = await getDoc(doc(db, 'groups', GROUPS_DOC));
+    if (snap.exists()) {
+      cachedGroups = snap.data().list || [];
+      localStorage.setItem('courtiq_groups_cache', JSON.stringify(cachedGroups));
+    } else {
+      cachedGroups = [];
+    }
+  } catch(e) {
+    console.error('Could not load groups from Firebase:', e);
+  }
+  renderGroupsDropdown();
 }
 
-function saveGroups(groups) {
-  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+async function saveGroupsToFirebase(groups) {
+  cachedGroups = groups;
+  // Cache locally for offline use
+  try { localStorage.setItem('courtiq_groups_cache', JSON.stringify(groups)); } catch(e) {}
+  try {
+    await setDoc(doc(db, 'groups', GROUPS_DOC), { list: groups, updatedAt: serverTimestamp() });
+  } catch(e) {
+    showToast('Saved locally — will sync when online', 'error');
+    console.error('Groups save error:', e);
+  }
 }
 
-function saveCurrentAsGroup() {
+async function saveCurrentAsGroup(editIdx) {
   const n = parseInt(document.getElementById('inp-n').value) || 6;
   const players = [];
   for (let i = 0; i < n; i++) {
@@ -486,54 +518,80 @@ function saveCurrentAsGroup() {
     if (v) players.push(v);
   }
   if (players.length < 4) { showToast('Enter at least 4 player names first', 'error'); return; }
-  const name = prompt('Name this group (e.g. "Tuesday Gang", "Office Group"):');
+  const existing = editIdx !== undefined ? cachedGroups[editIdx]?.name : '';
+  const name = prompt(editIdx !== undefined ? 'Rename group:' : 'Name this group (e.g. "Tuesday Gang"):', existing || '');
   if (!name?.trim()) return;
-  const groups = loadGroups();
-  groups.unshift({ name: name.trim(), players, savedAt: new Date().toISOString() });
-  saveGroups(groups.slice(0, 10)); // keep max 10 groups
+  const groups = [...cachedGroups];
+  if (editIdx !== undefined) {
+    groups[editIdx] = { name: name.trim(), players, savedAt: new Date().toISOString() };
+    showToast('Group updated!');
+  } else {
+    groups.unshift({ name: name.trim(), players, savedAt: new Date().toISOString() });
+    showToast('Group "' + name.trim() + '" saved!');
+  }
+  await saveGroupsToFirebase(groups.slice(0, 10));
   renderGroupsDropdown();
-  showToast('Group "' + name.trim() + '" saved!');
 }
 
 function loadGroup(idx) {
-  const groups = loadGroups();
-  const group = groups[idx];
+  const group = cachedGroups[idx];
   if (!group) return;
-  // Set player count
   const n = group.players.length % 2 === 0 ? group.players.length : group.players.length + 1;
   document.getElementById('inp-n').value = n;
   refreshPlayerInputs(group.players);
-  showToast('Loaded group: ' + group.name, 'link');
-  renderGroupsDropdown(); // refresh chips after loading
+  showToast('Loaded: ' + group.name, 'link');
 }
 
-function deleteGroup(idx) {
-  const groups = loadGroups();
-  const name = groups[idx]?.name;
+async function deleteGroup(idx) {
+  const name = cachedGroups[idx]?.name;
   if (!confirm('Delete group "' + name + '"?')) return;
+  const groups = [...cachedGroups];
   groups.splice(idx, 1);
-  saveGroups(groups);
+  await saveGroupsToFirebase(groups);
   renderGroupsDropdown();
   showToast('Group deleted');
 }
 
+async function editGroup(idx) {
+  const group = cachedGroups[idx];
+  if (!group) return;
+  const n = group.players.length % 2 === 0 ? group.players.length : group.players.length + 1;
+  document.getElementById('inp-n').value = n;
+  refreshPlayerInputs(group.players);
+  showToast('Edit players above then click Update Group', 'link');
+  const wrap = document.getElementById('groups-wrap');
+  const existing = document.getElementById('update-group-bar');
+  if (existing) existing.remove();
+  const bar = document.createElement('div');
+  bar.id = 'update-group-bar';
+  bar.className = 'update-group-bar';
+  bar.innerHTML = '<span>Editing <strong>' + group.name + '</strong> — update names above</span>'
+    + '<div style="display:flex;gap:6px;">'
+    + '<button class="btn-save" onclick="saveCurrentAsGroup(' + idx + ');document.getElementById('update-group-bar').remove();">Update group</button>'
+    + '<button class="btn-outline" style="padding:5px 12px;font-size:12px;" onclick="document.getElementById('update-group-bar').remove();">Cancel</button>'
+    + '</div>';
+  wrap.after(bar);
+}
+
 function renderGroupsDropdown() {
-  const groups = loadGroups();
   const wrap = document.getElementById('groups-wrap');
   const chipsEl = document.getElementById('groups-chips');
   if (!wrap || !chipsEl) return;
-  if (groups.length === 0) {
+  if (!cachedGroups || cachedGroups.length === 0) {
     wrap.style.display = 'none';
     return;
   }
   wrap.style.display = '';
-  chipsEl.innerHTML = groups.map((g, i) => `
+  chipsEl.innerHTML = cachedGroups.map((g, i) => `
     <div class="group-chip">
-      <button class="group-chip-load" onclick="loadGroup(${i})">
+      <button class="group-chip-load" onclick="loadGroup(${i})" title="Load ${g.name}">
         <span class="group-chip-name">${g.name}</span>
         <span class="group-chip-count">${g.players.length} players</span>
       </button>
-      <button class="group-chip-delete" onclick="deleteGroup(${i})" title="Delete group">✕</button>
+      <div class="group-chip-actions">
+        <button class="group-action-btn edit" onclick="editGroup(${i})" title="Edit">✏️</button>
+        <button class="group-action-btn delete" onclick="deleteGroup(${i})" title="Delete">✕</button>
+      </div>
     </div>
   `).join('');
 }
@@ -882,12 +940,15 @@ window.promptAdminPin = promptAdminPin;
 window.forceSaveHistory = forceSaveHistory;
 window.S = S;
 
-// ── Auto-rejoin ───────────────────────────────────────────────────────────────
-const lastCode = localStorage.getItem('pickleball_last_code');
-if (lastCode) {
-  document.getElementById('join-code').value = lastCode;
-  joinLeague();
-} else {
-  refreshPlayerInputs();
+// ── Auto-rejoin & init ───────────────────────────────────────────────────────
+async function init() {
+  await loadGroupsFromFirebase();
+  const lastCode = localStorage.getItem('pickleball_last_code');
+  if (lastCode) {
+    document.getElementById('join-code').value = lastCode;
+    await joinLeague();
+  } else {
+    refreshPlayerInputs();
+  }
 }
-renderGroupsDropdown();
+init();

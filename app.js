@@ -482,7 +482,7 @@ function loadGroup(idx) {
   document.getElementById('inp-n').value = n;
   refreshPlayerInputs(group.players);
   showToast('Loaded group: ' + group.name, 'link');
-  document.getElementById('groups-dropdown').value = '';
+  renderGroupsDropdown(); // refresh chips after loading
 }
 
 function deleteGroup(idx) {
@@ -849,6 +849,7 @@ window.refreshPlayerInputs = refreshPlayerInputs;
 window.saveCurrentAsGroup = saveCurrentAsGroup;
 window.loadGroup = loadGroup;
 window.deleteGroup = deleteGroup;
+window.editGroup = editGroup;
 window.generateLeague = generateLeague;
 window.joinLeague = joinLeague;
 window.submitScore = submitScore;

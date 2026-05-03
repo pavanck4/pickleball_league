@@ -584,14 +584,37 @@ input:focus {
   color: var(--text-tertiary);
 }
 
-.group-chip-delete {
-  padding: 0 10px;
+.group-chip-actions {
+  display: flex;
+  border-left: 0.5px solid var(--border);
+}
+
+.group-action-btn {
+  padding: 0 9px;
   background: transparent;
   border: none;
-  border-left: 0.5px solid var(--border);
   cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
   color: var(--text-tertiary);
-  font-size: 11px;
-  transition: background 0.15s, color 0.15s;
 }
-.group-chip-delete:hover { background: var(--coral-light); color: var(--coral-text); }
+.group-action-btn + .group-action-btn {
+  border-left: 0.5px solid var(--border);
+}
+.group-action-btn.edit:hover { background: var(--blue-light); }
+.group-action-btn.delete:hover { background: var(--coral-light); color: var(--coral-text); }
+
+.update-group-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--amber-light);
+  border: 0.5px solid #F0C98A;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--amber-text);
+  margin-bottom: 10px;
+}

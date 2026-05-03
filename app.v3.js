@@ -472,13 +472,17 @@ function refreshPlayerInputs(preload) {
   n = Math.max(4, Math.min(20, n));
   const cont = document.getElementById('player-inputs');
   if (!cont) return;
+  // Only carry over existing values if a group is being loaded (preload provided)
+  // Otherwise keep whatever is already typed (e.g. when switching mode or changing count)
   const existing = preload || Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
   cont.innerHTML = '';
   for (let i = 0; i < n; i++) {
     const row = document.createElement('div');
     row.className = 'player-row';
     const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
-    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="' + (existing[i] || '') + '" id="pi' + i + '">' + lbl;
+    // Only pre-fill if preload was given (loading a group), otherwise empty
+    const val = preload ? (existing[i] || '') : (existing[i] || '');
+    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="' + val + '" id="pi' + i + '">' + lbl;
     cont.appendChild(row);
   }
 }
@@ -518,7 +522,7 @@ function confirmReset() {
   document.getElementById('join-code').value = '';
   setSyncStatus('');
   setAdminMode(false);
-  refreshPlayerInputs();
+  clearPlayerInputs();
   document.getElementById('matches-list').innerHTML = '';
   document.getElementById('standings-body').innerHTML = '';
   gotoTab('setup', document.getElementById('nav-setup'));
@@ -769,11 +773,13 @@ window.loadGroup = loadGroup;
 window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
+window.clearPlayerInputs = clearPlayerInputs;
 window.S = S;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  refreshPlayerInputs();
+  // Start with empty player inputs
+  clearPlayerInputs();
   await loadGroupsFromFirebase();
   const lastCode = localStorage.getItem('pickleball_last_code');
   if (lastCode) {
@@ -781,4 +787,21 @@ async function init() {
     await joinLeague(true);
   }
 }
+
+function clearPlayerInputs() {
+  let n = parseInt(document.getElementById('inp-n').value) || 6;
+  if (n % 2 !== 0) n++;
+  n = Math.max(4, Math.min(20, n));
+  const cont = document.getElementById('player-inputs');
+  if (!cont) return;
+  cont.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement('div');
+    row.className = 'player-row';
+    const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
+    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="" id="pi' + i + '">' + lbl;
+    cont.appendChild(row);
+  }
+}
+
 init();

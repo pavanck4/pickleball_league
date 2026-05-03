@@ -155,6 +155,44 @@ function calcStandings(state) {
   }
 }
 
+// ── Schedule serialization (Firestore doesn't allow nested arrays) ────────────
+
+function serializeSchedule(schedule) {
+  const obj = {};
+  schedule.forEach((round, i) => { obj['r' + i] = round; });
+  return obj;
+}
+
+function deserializeSchedule(obj, roundCount) {
+  if (!obj) return [];
+  if (Array.isArray(obj)) return obj;
+  const out = [];
+  for (let i = 0; i < roundCount; i++) out.push(obj['r' + i] || []);
+  return out;
+}
+
+function prepareForFirestore(state) {
+  return {
+    mode: state.mode,
+    players: state.players,
+    teams: state.teams,
+    rounds: state.rounds,
+    schedule: serializeSchedule(state.schedule),
+    results: state.results
+  };
+}
+
+function restoreFromFirestore(data) {
+  return {
+    mode: data.mode,
+    players: data.players || [],
+    teams: data.teams || [],
+    rounds: data.rounds || 0,
+    schedule: deserializeSchedule(data.schedule, data.rounds),
+    results: data.results || {}
+  };
+}
+
 // ── Firebase ──────────────────────────────────────────────────────────────────
 
 async function saveToFirebase() {
@@ -167,10 +205,10 @@ async function saveToFirebase() {
   const isComplete = doneM === totalM && totalM > 0;
   const standings = calcStandings(S);
 
-  // Step 1: Save league
+  // Step 1: Save league with serialized schedule
   try {
     await setDoc(doc(db, 'leagues', leagueCode), {
-      ...S,
+      ...prepareForFirestore(S),
       leagueCode,
       adminPin,
       isComplete,
@@ -195,12 +233,7 @@ async function saveToFirebase() {
       const existing = await getDoc(histRef);
       const histData = {
         leagueCode,
-        mode: S.mode,
-        players: S.players,
-        teams: S.teams,
-        rounds: S.rounds,
-        results: S.results,
-        schedule: S.schedule,
+        ...prepareForFirestore(S),
         standings,
         isComplete: true,
         completedAt: serverTimestamp(),
@@ -229,7 +262,7 @@ function subscribeToLeague(code) {
     if (!snap.exists()) return;
     const data = snap.data();
     if (!isSaving) {
-      S = { mode: data.mode, players: data.players, teams: data.teams, rounds: data.rounds, schedule: data.schedule, results: data.results };
+      S = restoreFromFirestore(data);
       adminPin = data.adminPin || null;
       renderSchedule();
       renderStandings();
@@ -255,9 +288,10 @@ async function loadHistory() {
 }
 
 function buildHistoryCard(d) {
-  const totalM = d.schedule.reduce((s, r) => s + r.length, 0);
+  const sched = deserializeSchedule(d.schedule, d.rounds);
+  const totalM = sched.reduce((s, r) => s + r.length, 0);
   const doneM = Object.values(d.results).filter(r => r.done).length;
-  const standings = d.standings || calcStandings(d);
+  const standings = d.standings || calcStandings({...d, schedule: sched});
   const top3 = standings.slice(0, 3);
   const medals = ['🥇', '🥈', '🥉'];
   const card = document.createElement('div');
@@ -318,7 +352,7 @@ async function joinLeague() {
     const snap = await getDoc(doc(db, 'leagues', code));
     if (!snap.exists()) { errEl.textContent = `No league found with code "${code}".`; return; }
     const data = snap.data();
-    S = { mode: data.mode, players: data.players, teams: data.teams, rounds: data.rounds, schedule: data.schedule, results: data.results };
+    S = restoreFromFirestore(data);
     adminPin = data.adminPin || null;
     leagueCode = code;
     activeRound = 0;
@@ -638,6 +672,35 @@ function renderSchedule() {
   });
 }
 
+async function saveToHistory(standings) {
+  if (!leagueCode) return;
+  try {
+    const histRef = doc(db, 'history', leagueCode);
+    const existing = await getDoc(histRef);
+    const histData = {
+      leagueCode,
+      mode: S.mode,
+      players: S.players,
+      teams: S.teams,
+      rounds: S.rounds,
+      results: S.results,
+      schedule: S.schedule,
+      standings,
+      isComplete: true,
+      completedAt: serverTimestamp(),
+    };
+    if (!existing.exists()) {
+      histData.createdAt = serverTimestamp();
+    }
+    await setDoc(histRef, histData, { merge: true });
+    console.log('✅ History saved for', leagueCode);
+    return true;
+  } catch(e) {
+    console.error('❌ History save error:', e);
+    return false;
+  }
+}
+
 function renderStandings() {
   const cont = document.getElementById('standings-body');
   if (!S.teams.length) { cont.innerHTML = '<p class="muted">Generate the league first.</p>'; return; }
@@ -646,6 +709,12 @@ function renderStandings() {
   const allDone = doneM === totalM && totalM > 0;
   const standings = calcStandings(S);
   const isFixed = S.mode === 'fixed';
+
+  // Always try to save to history when all done — safe to call multiple times (merge:true)
+  if (allDone && leagueCode) {
+    saveToHistory(standings);
+  }
+
   cont.innerHTML = `
     <div class="grid4">
       <div class="metric"><div class="metric-val">${isFixed?S.teams.length:S.players.length}</div><div class="metric-lbl">${isFixed?'Teams':'Players'}</div></div>
@@ -654,7 +723,12 @@ function renderStandings() {
       <div class="metric"><div class="metric-val">${allDone?'Final':'Live'}</div><div class="metric-lbl">Status</div></div>
     </div>
     ${!isFixed?'<div class="warn-box">Rotating partners — individual player rankings.</div>':''}
-    ${allDone?'<div class="info-box">🏆 All matches complete — saved to history!</div>':''}
+    ${allDone?`<div class="info-box">
+      🏆 All matches complete!
+      <button onclick="forceSaveHistory()" style="margin-left:10px;background:#185FA5;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit;">
+        Save to History
+      </button>
+    </div>`:''}
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="standings-wrap"><table class="stbl">
         <thead><tr><th>#</th><th>${isFixed?'Team':'Player'}</th>${isFixed?'<th>Players</th>':''}<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>
@@ -672,6 +746,18 @@ function renderStandings() {
     <p class="tiebreak-note">Tiebreakers: league points → score diff → total scored</p>`;
 }
 
+async function forceSaveHistory() {
+  if (!leagueCode) return;
+  const standings = calcStandings(S);
+  showToast('Saving to history…', 'link');
+  const ok = await saveToHistory(standings);
+  if (ok) {
+    showToast('Saved to history!');
+  } else {
+    showToast('Failed — check console for errors', 'error');
+  }
+}
+
 // ── Expose globals ────────────────────────────────────────────────────────────
 window.gotoTab = gotoTab;
 window.selectMode = selectMode;
@@ -683,6 +769,7 @@ window.confirmReset = confirmReset;
 window.copyCode = copyCode;
 window.toggleHistoryDetail = toggleHistoryDetail;
 window.promptAdminPin = promptAdminPin;
+window.forceSaveHistory = forceSaveHistory;
 window.S = S;
 
 // ── Auto-rejoin ───────────────────────────────────────────────────────────────

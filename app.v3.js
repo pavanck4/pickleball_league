@@ -371,7 +371,7 @@ function buildHistoryCard(d) {
 
 // ── UI ────────────────────────────────────────────────────────────────────────
 
-async function joinLeague() {
+async function joinLeague(silent) {
   const input = document.getElementById('join-code');
   const errEl = document.getElementById('join-err');
   const code = input.value.trim().toUpperCase();
@@ -400,8 +400,12 @@ async function joinLeague() {
     renderSchedule();
     renderStandings();
     updateBanner();
-    gotoTab('schedule', document.getElementById('nav-schedule'));
-    showToast('Joined league ' + code, 'link');
+    if (!silent) {
+      gotoTab('schedule', document.getElementById('nav-schedule'));
+      showToast('Joined league ' + code, 'link');
+    } else {
+      showLeagueUI();
+    }
   } catch(e) {
     errEl.textContent = 'Error connecting. Check your internet.';
     console.error(e);
@@ -454,6 +458,7 @@ function gotoTab(t, btn) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + t).classList.add('active');
   (btn || document.getElementById('nav-' + t)).classList.add('active');
+  if (t === 'setup') refreshPlayerInputs();
   if (t === 'standings') renderStandings();
   if (t === 'schedule') renderSchedule();
   if (t === 'history') loadHistory();
@@ -474,39 +479,42 @@ const GROUPS_DOC = 'courtiq_shared_groups';
 let cachedGroups = [];
 
 async function loadGroupsFromFirebase() {
-  // Load from local cache first for instant UI
+  // Step 1: show local cache instantly
   try {
-    const local = JSON.parse(localStorage.getItem('courtiq_groups_cache'));
-    if (local && local.length > 0) {
+    const local = JSON.parse(localStorage.getItem('courtiq_groups_cache') || '[]');
+    if (Array.isArray(local) && local.length > 0) {
       cachedGroups = local;
       renderGroupsDropdown();
     }
   } catch(e) {}
 
-  // Then fetch fresh from Firebase
+  // Step 2: fetch from Firebase and update
   try {
-    const snap = await getDoc(doc(db, 'groups', GROUPS_DOC));
-    if (snap.exists()) {
-      cachedGroups = snap.data().list || [];
+    const ref = doc(db, 'groups', GROUPS_DOC);
+    const snap = await getDoc(ref);
+    if (snap.exists() && snap.data().list) {
+      cachedGroups = snap.data().list;
       localStorage.setItem('courtiq_groups_cache', JSON.stringify(cachedGroups));
-    } else {
-      cachedGroups = [];
     }
   } catch(e) {
-    console.error('Could not load groups from Firebase:', e);
+    console.error('Groups Firebase load error:', e);
   }
   renderGroupsDropdown();
 }
 
 async function saveGroupsToFirebase(groups) {
   cachedGroups = groups;
-  // Cache locally for offline use
+  // Always save locally first
   try { localStorage.setItem('courtiq_groups_cache', JSON.stringify(groups)); } catch(e) {}
+  // Then save to Firebase
   try {
-    await setDoc(doc(db, 'groups', GROUPS_DOC), { list: groups, updatedAt: serverTimestamp() });
+    const ref = doc(db, 'groups', GROUPS_DOC);
+    await setDoc(ref, { list: groups, updatedAt: serverTimestamp() });
+    return true;
   } catch(e) {
-    showToast('Saved locally — will sync when online', 'error');
-    console.error('Groups save error:', e);
+    console.error('Groups Firebase save error:', e.code, e.message);
+    showDebug('Groups save failed: ' + e.code + ' — ' + e.message);
+    return false;
   }
 }
 
@@ -524,13 +532,16 @@ async function saveCurrentAsGroup(editIdx) {
   const groups = [...cachedGroups];
   if (editIdx !== undefined) {
     groups[editIdx] = { name: name.trim(), players, savedAt: new Date().toISOString() };
-    showToast('Group updated!');
   } else {
     groups.unshift({ name: name.trim(), players, savedAt: new Date().toISOString() });
-    showToast('Group "' + name.trim() + '" saved!');
   }
-  await saveGroupsToFirebase(groups.slice(0, 10));
+  const ok = await saveGroupsToFirebase(groups.slice(0, 10));
   renderGroupsDropdown();
+  if (ok) {
+    showToast('✓ Group saved & synced to all devices!');
+  } else {
+    showToast('Saved on this device only — check Firestore rules', 'error');
+  }
 }
 
 function loadGroup(idx) {
@@ -593,7 +604,7 @@ function renderGroupsDropdown() {
         <button class="group-action-btn delete" onclick="deleteGroup(${i})" title="Delete">✕</button>
       </div>
     </div>
-  `).join('');
+  `).join('') + '<button class="btn-refresh-groups" onclick="loadGroupsFromFirebase()" title="Refresh from cloud">↻ Sync</button>';
 }
 
 function refreshPlayerInputs(preload) {
@@ -942,13 +953,17 @@ window.S = S;
 
 // ── Auto-rejoin & init ───────────────────────────────────────────────────────
 async function init() {
-  await loadGroupsFromFirebase();
+  // Always render player inputs first
+  refreshPlayerInputs();
+
+  // Load groups from Firebase in background
+  loadGroupsFromFirebase().catch(e => console.error('Groups load failed:', e));
+
+  // Auto-rejoin last league if any
   const lastCode = localStorage.getItem('pickleball_last_code');
   if (lastCode) {
     document.getElementById('join-code').value = lastCode;
-    await joinLeague();
-  } else {
-    refreshPlayerInputs();
+    joinLeague().catch(e => console.error('Auto-rejoin failed:', e));
   }
 }
 init();

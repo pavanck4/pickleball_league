@@ -32,6 +32,13 @@ function generateCode() {
   return code;
 }
 
+function showDebug(msg) {
+  const el = document.getElementById('debug-box');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
   t.textContent = (type === 'success' ? '✓ ' : type === 'link' ? '🔗 ' : 'ℹ ') + msg;
@@ -673,18 +680,20 @@ function renderSchedule() {
 }
 
 async function saveToHistory(standings) {
-  if (!leagueCode) return;
+  if (!leagueCode) return false;
   try {
     const histRef = doc(db, 'history', leagueCode);
     const existing = await getDoc(histRef);
+    // Use prepareForFirestore to avoid nested array error
+    const safe = prepareForFirestore(S);
     const histData = {
       leagueCode,
-      mode: S.mode,
-      players: S.players,
-      teams: S.teams,
-      rounds: S.rounds,
-      results: S.results,
-      schedule: S.schedule,
+      mode: safe.mode,
+      players: safe.players,
+      teams: safe.teams,
+      rounds: safe.rounds,
+      results: safe.results,
+      schedule: safe.schedule,
       standings,
       isComplete: true,
       completedAt: serverTimestamp(),
@@ -693,10 +702,10 @@ async function saveToHistory(standings) {
       histData.createdAt = serverTimestamp();
     }
     await setDoc(histRef, histData, { merge: true });
-    console.log('✅ History saved for', leagueCode);
+    showDebug('✅ History saved for ' + leagueCode);
     return true;
   } catch(e) {
-    console.error('❌ History save error:', e);
+    showDebug('❌ Error: ' + e.message);
     return false;
   }
 }
@@ -723,12 +732,13 @@ function renderStandings() {
       <div class="metric"><div class="metric-val">${allDone?'Final':'Live'}</div><div class="metric-lbl">Status</div></div>
     </div>
     ${!isFixed?'<div class="warn-box">Rotating partners — individual player rankings.</div>':''}
-    ${allDone?`<div class="info-box">
-      🏆 All matches complete!
-      <button onclick="forceSaveHistory()" style="margin-left:10px;background:#185FA5;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit;">
+    ${allDone?`<div class="info-box" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span>🏆 All matches complete!</span>
+      <button onclick="forceSaveHistory()" style="background:#185FA5;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;">
         Save to History
       </button>
-    </div>`:''}
+    </div>
+    <div id="debug-box" style="display:none;background:#f8f3e8;border:0.5px solid #e0c870;border-radius:8px;padding:10px 14px;font-size:12px;color:#633806;margin-bottom:1rem;font-family:monospace;word-break:break-all;"></div>`:''}
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="standings-wrap"><table class="stbl">
         <thead><tr><th>#</th><th>${isFixed?'Team':'Player'}</th>${isFixed?'<th>Players</th>':''}<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>
@@ -750,11 +760,13 @@ async function forceSaveHistory() {
   if (!leagueCode) return;
   const standings = calcStandings(S);
   showToast('Saving to history…', 'link');
+  showDebug('Saving league: ' + leagueCode + ' | schedule type: ' + typeof S.schedule + ' | isArray: ' + Array.isArray(S.schedule));
   const ok = await saveToHistory(standings);
   if (ok) {
-    showToast('Saved to history!');
+    showToast('🏆 Saved to history!');
+    showDebug('✅ Success! Check History tab now.');
   } else {
-    showToast('Failed — check console for errors', 'error');
+    showToast('Failed — see debug box', 'error');
   }
 }
 

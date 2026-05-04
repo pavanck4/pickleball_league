@@ -77,21 +77,10 @@ function setSyncStatus(s) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-function isMobile() {
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-}
-
 async function loginWithGoogle() {
   try {
-    if (isMobile()) {
-      // Use redirect on mobile — popup doesn't work on iPhone Safari
-      await signInWithRedirect(auth, provider);
-    } else {
-      const result = await signInWithPopup(auth, provider);
-      currentUser = result.user;
-      await saveUserProfile(currentUser);
-      showToast('Welcome ' + currentUser.displayName + '!');
-    }
+    // Always use redirect — works on all browsers including iPhone Safari
+    await signInWithRedirect(auth, provider);
   } catch (e) {
     showToast('Login failed — ' + e.message, 'error');
     console.error(e);

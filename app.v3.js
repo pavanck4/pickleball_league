@@ -429,7 +429,7 @@ async function renderUsers() {
   const cont = document.getElementById('users-body');
   if (!cont) return;
   if (!isAppAdmin()) {
-    cont.innerHTML = '<div class="warn-box">⛔ Admin access only.<br><small>Your email: ' + (currentUser?.email || 'not logged in') + '</small></div>';
+    cont.innerHTML = '<div class="warn-box">⛔ Admin access only.</div>';
     return;
   }
   cont.innerHTML = '<p class="muted">Loading users…</p>';
@@ -439,42 +439,62 @@ async function renderUsers() {
     const usersSnap = await getDocs(collection(db, 'users'));
     const users = [];
     usersSnap.forEach(d => users.push(d.data()));
+
+    // If no users yet, show the current logged in user at least
+    if (users.length === 0 && currentUser) {
+      users.push({
+        uid: currentUser.uid,
+        name: currentUser.displayName,
+        email: currentUser.email,
+        photo: currentUser.photoURL,
+        createdAt: null
+      });
+    }
+
     users.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-    // Listen to presence from Realtime Database
-    const presenceRef = ref(rtdb, 'presence');
-    onValue(presenceRef, presSnap => {
-      const presence = presSnap.val() || {};
-      const onlineCount = Object.values(presence).filter(p => p.online).length;
+    // Try to get presence from Realtime Database (optional)
+    let presence = {};
+    try {
+      const presenceRef = ref(rtdb, 'presence');
+      const presSnap = await new Promise(resolve => {
+        onValue(presenceRef, snap => resolve(snap), { onlyOnce: true });
+      });
+      presence = presSnap.val() || {};
+    } catch(e) {
+      console.log('Presence not available:', e.message);
+    }
 
-      cont.innerHTML = `
-        <div class="grid4" style="margin-bottom:1.25rem;">
-          <div class="metric"><div class="metric-val">${users.length}</div><div class="metric-lbl">Enrolled</div></div>
-          <div class="metric"><div class="metric-val" style="color:#1D9E75;">${onlineCount}</div><div class="metric-lbl">Online now</div></div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          ${users.map(u => {
-            const isOnline = presence[u.uid]?.online === true;
-            return `
-              <div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:12px;">
-                <div style="position:relative;flex-shrink:0;">
-                  <img src="${u.photo || ''}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">
-                  <div style="position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;background:${isOnline?'#1D9E75':'#ccc'};border:2px solid white;"></div>
-                </div>
-                <div style="flex:1;">
-                  <div style="font-size:14px;font-weight:500;">${u.name || 'Unknown'}</div>
-                  <div style="font-size:12px;color:var(--text-secondary);">${u.email || ''}</div>
-                </div>
-                <div style="text-align:right;">
-                  <span class="pill ${isOnline?'pill-done':'pill-pend'}" style="font-size:11px;">${isOnline?'● Online':'Offline'}</span>
-                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:3px;">${u.createdAt ? 'Joined ' + formatDate(u.createdAt) : ''}</div>
-                </div>
-              </div>`;
-          }).join('')}
-        </div>`;
-    });
+    const onlineCount = Object.values(presence).filter(p => p.online).length || (currentUser ? 1 : 0);
+
+    cont.innerHTML = `
+      <div class="grid4" style="margin-bottom:1.25rem;">
+        <div class="metric"><div class="metric-val">${users.length}</div><div class="metric-lbl">Enrolled</div></div>
+        <div class="metric"><div class="metric-val" style="color:#1D9E75;">${onlineCount}</div><div class="metric-lbl">Online now</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${users.map(u => {
+          const isOnline = presence[u.uid]?.online === true || u.uid === currentUser?.uid;
+          return `
+            <div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:12px;">
+              <div style="position:relative;flex-shrink:0;">
+                <img src="${u.photo || ''}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#e0e0e0;" onerror="this.style.display='none'">
+                <div style="position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;background:${isOnline?'#1D9E75':'#ccc'};border:2px solid white;"></div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:14px;font-weight:500;">${u.name || 'Unknown'}</div>
+                <div style="font-size:12px;color:var(--text-secondary);">${u.email || ''}</div>
+              </div>
+              <div style="text-align:right;">
+                <span class="pill ${isOnline?'pill-done':'pill-pend'}" style="font-size:11px;">${isOnline?'● Online':'Offline'}</span>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:3px;">${u.createdAt ? 'Joined ' + formatDate(u.createdAt) : 'Just joined'}</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+
   } catch (e) {
-    cont.innerHTML = '<p class="muted">Could not load users.</p>';
+    cont.innerHTML = '<div class="warn-box">Could not load users — check Firestore rules allow reading the users collection.<br><small>' + e.message + '</small></div>';
     console.error(e);
   }
 }

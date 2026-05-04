@@ -24,6 +24,58 @@ const provider = new GoogleAuthProvider();
 const ADMIN_EMAIL = 'pavanck4@gmail.com';
 function isAppAdmin() { return currentUser?.email === ADMIN_EMAIL; }
 
+// ── Plan Management ───────────────────────────────────────────────────────────
+const FREE_PLAYER_LIMIT = 8;
+let currentUserData = null;
+
+function isPro() {
+  if (isAppAdmin()) return true; // Admin always has pro
+  if (!currentUserData) return false;
+  if (currentUserData.plan === 'pro') {
+    const expiry = currentUserData.planExpiry?.toDate?.() || new Date(currentUserData.planExpiry || 0);
+    return expiry > new Date();
+  }
+  return false;
+}
+
+function showUpgradeModal() {
+  const modal = document.getElementById('upgrade-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function hideUpgradeModal() {
+  const modal = document.getElementById('upgrade-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function loadUserData() {
+  if (!currentUser) return;
+  try {
+    const snap = await getDoc(doc(db, 'users', currentUser.uid));
+    if (snap.exists()) {
+      currentUserData = snap.data();
+    } else {
+      currentUserData = { plan: 'free' };
+    }
+    updatePlanBadge();
+  } catch(e) {
+    console.error('loadUserData error:', e);
+  }
+}
+
+function updatePlanBadge() {
+  const badge = document.getElementById('plan-badge');
+  if (!badge) return;
+  if (isPro()) {
+    badge.textContent = '⭐ Pro';
+    badge.className = 'plan-badge pro';
+  } else {
+    badge.textContent = 'Free';
+    badge.className = 'plan-badge free';
+  }
+  badge.style.display = '';
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
 let activeRound = 0;
@@ -54,7 +106,12 @@ function generateCode() {
 function formatDate(ts) {
   if (!ts) return '—';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  // Use browser's local timezone explicitly
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    timeZone: tz
+  });
 }
 
 function showToast(msg, type = 'success') {
@@ -375,7 +432,7 @@ function buildHistoryCard(d) {
 
   const hdr = document.createElement('div');
   hdr.className = 'history-header';
-  hdr.innerHTML = '<div><div class="history-date">' + formatDate(d.completedAt) + '</div>'
+  hdr.innerHTML = '<div><div class="history-date">' + (d.playedDate || formatDate(d.completedAt)) + '</div>'
     + '<div class="history-meta"><span class="hbadge ' + (isFixed ? 'tag-fixed' : 'tag-rotate') + '">' + (isFixed ? 'Fixed' : 'Rotating') + '</span>'
     + '<span class="history-sub">' + (d.players || []).length + ' players · ' + d.rounds + ' rounds · ' + doneM + '/' + totalM + ' matches</span></div></div>'
     + '<span class="history-code">' + d.leagueCode + '</span>';
@@ -557,7 +614,7 @@ async function renderProfile() {
 
     cont.innerHTML = `
       <div class="profile-hero">
-        <img src="${currentUser.photoURL || ''}" class="profile-avatar" onerror="this.style.display=&quot;none&quot;">
+        <img src="${currentUser.photoURL || ''}" class="profile-avatar" onerror="this.style.display='none'">
         <div class="profile-info">
           <div class="profile-name">${currentUser.displayName || 'Player'}</div>
           <div class="profile-email">${currentUser.email || ''}</div>
@@ -650,7 +707,7 @@ function renderMySchedule() {
 
   cont.innerHTML = `
     <div class="profile-hero" style="margin-bottom:1.25rem;">
-      <img src="${currentUser.photoURL||''}" class="profile-avatar" onerror="this.style.display=&quot;none&quot;">
+      <img src="${currentUser.photoURL||''}" class="profile-avatar" onerror="this.style.display='none'">
       <div class="profile-info">
         <div class="profile-name">${currentUser.displayName?.split(' ')[0]}'s Schedule</div>
         <div class="profile-email">League ${leagueCode} · ${doneM}/${totalM} played · ${wins} wins</div>
@@ -782,6 +839,9 @@ function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
   if (n % 2 !== 0) n++;
   n = Math.max(4, Math.min(20, n));
+  // Show upgrade hint if over free limit
+  const hint = document.getElementById('player-limit-hint');
+  if (hint) hint.style.display = (!isPro() && n > FREE_PLAYER_LIMIT) ? '' : 'none';
   const cont = document.getElementById('player-inputs');
   if (!cont) return;
   const existing = preload || Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
@@ -863,6 +923,12 @@ async function generateLeague() {
   errEl.textContent = '';
   if (n < 4 || n % 2 !== 0) { errEl.textContent = 'Need an even number of players (min 4).'; return; }
   if (rounds < 1) { errEl.textContent = 'Need at least 1 round.'; return; }
+
+  // Free tier limit
+  if (!isPro() && n > FREE_PLAYER_LIMIT) {
+    showUpgradeModal();
+    return;
+  }
   const players = [];
   for (let i = 0; i < n; i++) players.push((document.getElementById('pi' + i)?.value || '').trim() || 'Player ' + (i + 1));
   S.players = players; S.rounds = rounds; S.results = {};
@@ -870,6 +936,8 @@ async function generateLeague() {
   else generateRotating(players, rounds);
   activeRound = 0;
   leagueCode = generateCode();
+  // Store start date in local timezone
+  localStorage.setItem('league_start_' + leagueCode, new Date().toISOString());
   showLeagueUI();
   await saveToFirebase();
   subscribeToLeague(leagueCode);
@@ -1087,6 +1155,8 @@ window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
+window.showUpgradeModal = showUpgradeModal;
+window.hideUpgradeModal = hideUpgradeModal;
 window.logout = logout;
 window.renderUsers = renderUsers;
 window.S = S;
@@ -1106,6 +1176,7 @@ onAuthStateChanged(auth, async user => {
   renderAuthUI(user);
   if (user) {
     clearPlayerInputs();
+    await loadUserData();
     await loadGroupsFromFirebase();
     const lastCode = localStorage.getItem('pickleball_last_code');
     if (lastCode) {

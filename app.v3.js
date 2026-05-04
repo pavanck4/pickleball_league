@@ -2,6 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp as rtServerTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: window.__env?.FIREBASE_API_KEY,
@@ -9,13 +10,19 @@ const firebaseConfig = {
   projectId: "pikleball-scoreboard",
   storageBucket: "pikleball-scoreboard.firebasestorage.app",
   messagingSenderId: "495511862752",
-  appId: "1:495511862752:web:e479e2c24eb44b0e153f85"
+  appId: "1:495511862752:web:e479e2c24eb44b0e153f85",
+  databaseURL: "https://pikleball-scoreboard-default-rtdb.firebaseio.com"
 };
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+const rtdb = getDatabase(fbApp);
 const auth = getAuth(fbApp);
 const provider = new GoogleAuthProvider();
+
+// Only this email can see the Players tab
+const ADMIN_EMAIL = 'pavanck4@gmail.com';
+function isAppAdmin() { return currentUser?.email === ADMIN_EMAIL; }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
@@ -89,24 +96,45 @@ async function logout() {
 }
 
 async function saveUserProfile(user) {
-  const ref = doc(db, 'users', user.uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      uid: user.uid,
-      name: user.displayName,
-      email: user.email,
-      photo: user.photoURL,
-      createdAt: serverTimestamp()
-    });
-  }
+  // Save to Firestore
+  const userRef = doc(db, 'users', user.uid);
+  await setDoc(userRef, {
+    uid: user.uid,
+    name: user.displayName,
+    email: user.email,
+    photo: user.photoURL,
+    lastSeen: serverTimestamp(),
+    createdAt: serverTimestamp()
+  }, { merge: true });
+
+  // Set up Realtime Database presence
+  const presenceRef = ref(rtdb, 'presence/' + user.uid);
+  const connectedRef = ref(rtdb, '.info/connected');
+  onValue(connectedRef, snap => {
+    if (snap.val() === true) {
+      set(presenceRef, {
+        online: true,
+        name: user.displayName,
+        photo: user.photoURL,
+        uid: user.uid,
+        lastSeen: rtServerTimestamp()
+      });
+      onDisconnect(presenceRef).set({
+        online: false,
+        name: user.displayName,
+        photo: user.photoURL,
+        uid: user.uid,
+        lastSeen: rtServerTimestamp()
+      });
+    }
+  });
 }
 
 function renderAuthUI(user) {
   const authBtn = document.getElementById('auth-btn');
-  const userInfo = document.getElementById('user-info');
   const loginWall = document.getElementById('login-wall');
   const mainApp = document.getElementById('main-app');
+  const usersNav = document.getElementById('nav-users');
 
   if (user) {
     if (loginWall) loginWall.style.display = 'none';
@@ -115,6 +143,8 @@ function renderAuthUI(user) {
       authBtn.innerHTML = '<img src="' + (user.photoURL || '') + '" class="user-avatar"><span>' + (user.displayName || '').split(' ')[0] + '</span>';
       authBtn.onclick = () => gotoTab('profile', null);
     }
+    // Only show Players tab to admin
+    if (usersNav) usersNav.style.display = isAppAdmin() ? '' : 'none';
   } else {
     if (loginWall) loginWall.style.display = '';
     if (mainApp) mainApp.style.display = 'none';
@@ -122,6 +152,7 @@ function renderAuthUI(user) {
       authBtn.innerHTML = 'Sign in';
       authBtn.onclick = loginWithGoogle;
     }
+    if (usersNav) usersNav.style.display = 'none';
   }
 }
 
@@ -138,6 +169,7 @@ function gotoTab(t, btn) {
   if (t === 'history') loadHistory();
   if (t === 'profile') renderProfile();
   if (t === 'myschedule') renderMySchedule();
+  if (t === 'users') renderUsers();
 }
 
 // ── Schedule Serialization ────────────────────────────────────────────────────
@@ -390,6 +422,61 @@ function buildHistoryCard(d) {
   });
 
   return card;
+}
+
+// ── Users Dashboard ──────────────────────────────────────────────────────────
+async function renderUsers() {
+  const cont = document.getElementById('users-body');
+  if (!cont) return;
+  if (!isAppAdmin()) {
+    cont.innerHTML = '<div class="warn-box">⛔ Admin access only.</div>';
+    return;
+  }
+  cont.innerHTML = '<p class="muted">Loading users…</p>';
+
+  try {
+    // Load all enrolled users from Firestore
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const users = [];
+    usersSnap.forEach(d => users.push(d.data()));
+    users.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+    // Listen to presence from Realtime Database
+    const presenceRef = ref(rtdb, 'presence');
+    onValue(presenceRef, presSnap => {
+      const presence = presSnap.val() || {};
+      const onlineCount = Object.values(presence).filter(p => p.online).length;
+
+      cont.innerHTML = `
+        <div class="grid4" style="margin-bottom:1.25rem;">
+          <div class="metric"><div class="metric-val">${users.length}</div><div class="metric-lbl">Enrolled</div></div>
+          <div class="metric"><div class="metric-val" style="color:#1D9E75;">${onlineCount}</div><div class="metric-lbl">Online now</div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${users.map(u => {
+            const isOnline = presence[u.uid]?.online === true;
+            return `
+              <div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:12px;">
+                <div style="position:relative;flex-shrink:0;">
+                  <img src="${u.photo || ''}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">
+                  <div style="position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;background:${isOnline?'#1D9E75':'#ccc'};border:2px solid white;"></div>
+                </div>
+                <div style="flex:1;">
+                  <div style="font-size:14px;font-weight:500;">${u.name || 'Unknown'}</div>
+                  <div style="font-size:12px;color:var(--text-secondary);">${u.email || ''}</div>
+                </div>
+                <div style="text-align:right;">
+                  <span class="pill ${isOnline?'pill-done':'pill-pend'}" style="font-size:11px;">${isOnline?'● Online':'Offline'}</span>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:3px;">${u.createdAt ? 'Joined ' + formatDate(u.createdAt) : ''}</div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+    });
+  } catch (e) {
+    cont.innerHTML = '<p class="muted">Could not load users.</p>';
+    console.error(e);
+  }
 }
 
 // ── Firebase: Player Profile ──────────────────────────────────────────────────
@@ -963,6 +1050,7 @@ window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
 window.logout = logout;
+window.renderUsers = renderUsers;
 window.S = S;
 
 // ── Init ──────────────────────────────────────────────────────────────────────

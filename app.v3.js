@@ -1,7 +1,7 @@
 // CourtIQ v5 — Google Auth + Player Profiles + Personal Schedule
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp as rtServerTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -77,12 +77,21 @@ function setSyncStatus(s) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
 async function loginWithGoogle() {
   try {
-    const result = await signInWithPopup(auth, provider);
-    currentUser = result.user;
-    await saveUserProfile(currentUser);
-    showToast('Welcome ' + currentUser.displayName + '!');
+    if (isMobile()) {
+      // Use redirect on mobile — popup doesn't work on iPhone Safari
+      await signInWithRedirect(auth, provider);
+    } else {
+      const result = await signInWithPopup(auth, provider);
+      currentUser = result.user;
+      await saveUserProfile(currentUser);
+      showToast('Welcome ' + currentUser.displayName + '!');
+    }
   } catch (e) {
     showToast('Login failed — ' + e.message, 'error');
     console.error(e);
@@ -1092,6 +1101,17 @@ window.renderUsers = renderUsers;
 window.S = S;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Handle redirect result first (for mobile sign-in)
+getRedirectResult(auth).then(async result => {
+  if (result?.user) {
+    currentUser = result.user;
+    await saveUserProfile(currentUser);
+    showToast('Welcome ' + currentUser.displayName + '!');
+  }
+}).catch(e => {
+  if (e.code !== 'auth/no-current-user') console.error('Redirect result error:', e);
+});
+
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   renderAuthUI(user);

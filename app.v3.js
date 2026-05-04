@@ -1,11 +1,11 @@
 // CourtIQ v5 — Google Auth + Player Profiles + Personal Schedule
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp as rtServerTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: window.__env?.FIREBASE_API_KEY,
+  apiKey: window.__env?.FIREBASE_API_KEY || "AIzaSyDPDDpW7Hf0GqBuCXqvg9IeX9zVlaDOYeM",
   authDomain: "pikleball-scoreboard.firebaseapp.com",
   projectId: "pikleball-scoreboard",
   storageBucket: "pikleball-scoreboard.firebasestorage.app",
@@ -78,12 +78,59 @@ function setSyncStatus(s) {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function loginWithGoogle() {
+  // Try Google first, fall back to email
   try {
-    // Always use redirect — works on all browsers including iPhone Safari
     await signInWithRedirect(auth, provider);
-  } catch (e) {
-    showToast('Login failed — ' + e.message, 'error');
+  } catch(e) {
     console.error(e);
+  }
+}
+
+async function loginWithEmail(isSignup) {
+  const name = document.getElementById('auth-name')?.value.trim();
+  const email = document.getElementById('auth-email')?.value.trim();
+  const password = document.getElementById('auth-password')?.value.trim();
+  if (!email || !password) { showToast('Enter email and password', 'error'); return; }
+  if (isSignup && !name) { showToast('Enter your name', 'error'); return; }
+  try {
+    let result;
+    if (isSignup) {
+      result = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(result.user, { displayName: name });
+    } else {
+      result = await signInWithEmailAndPassword(auth, email, password);
+    }
+    currentUser = result.user;
+    await saveUserProfile(result.user);
+    showToast('Welcome ' + result.user.displayName + '!');
+  } catch(e) {
+    const msg = e.code === 'auth/user-not-found' ? 'No account found. Sign up first.'
+      : e.code === 'auth/wrong-password' ? 'Incorrect password.'
+      : e.code === 'auth/email-already-in-use' ? 'Email already registered. Sign in instead.'
+      : e.code === 'auth/weak-password' ? 'Password must be at least 6 characters.'
+      : e.message;
+    showToast(msg, 'error');
+  }
+}
+
+function toggleAuthMode() {
+  const nameField = document.getElementById('auth-name-wrap');
+  const submitBtn = document.getElementById('auth-submit-btn');
+  const toggleBtn = document.getElementById('auth-toggle-btn');
+  const titleEl = document.getElementById('auth-title');
+  const isSignup = submitBtn.dataset.mode === 'signup';
+  if (isSignup) {
+    submitBtn.dataset.mode = 'login';
+    submitBtn.textContent = 'Sign in';
+    titleEl.textContent = 'Sign in to CourtIQ';
+    toggleBtn.innerHTML = "Don't have an account? <span style='color:#1D9E75;cursor:pointer;font-weight:500;' onclick='toggleAuthMode()'>Sign up</span>";
+    if (nameField) nameField.style.display = 'none';
+  } else {
+    submitBtn.dataset.mode = 'signup';
+    submitBtn.textContent = 'Create account';
+    titleEl.textContent = 'Create your account';
+    toggleBtn.innerHTML = "Already have an account? <span style='color:#1D9E75;cursor:pointer;font-weight:500;' onclick='toggleAuthMode()'>Sign in</span>";
+    if (nameField) nameField.style.display = '';
   }
 }
 
@@ -1085,6 +1132,8 @@ window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
+window.loginWithEmail = loginWithEmail;
+window.toggleAuthMode = toggleAuthMode;
 window.logout = logout;
 window.renderUsers = renderUsers;
 window.S = S;

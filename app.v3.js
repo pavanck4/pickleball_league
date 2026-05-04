@@ -557,7 +557,7 @@ async function renderProfile() {
 
     cont.innerHTML = `
       <div class="profile-hero">
-        <img src="${currentUser.photoURL || ''}" class="profile-avatar" onerror="this.style.display='none'">
+        <img src="${currentUser.photoURL || ''}" class="profile-avatar" onerror="this.style.display=&quot;none&quot;">
         <div class="profile-info">
           <div class="profile-name">${currentUser.displayName || 'Player'}</div>
           <div class="profile-email">${currentUser.email || ''}</div>
@@ -650,7 +650,7 @@ function renderMySchedule() {
 
   cont.innerHTML = `
     <div class="profile-hero" style="margin-bottom:1.25rem;">
-      <img src="${currentUser.photoURL||''}" class="profile-avatar" onerror="this.style.display='none'">
+      <img src="${currentUser.photoURL||''}" class="profile-avatar" onerror="this.style.display=&quot;none&quot;">
       <div class="profile-info">
         <div class="profile-name">${currentUser.displayName?.split(' ')[0]}'s Schedule</div>
         <div class="profile-email">League ${leagueCode} · ${doneM}/${totalM} played · ${wins} wins</div>

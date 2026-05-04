@@ -1,11 +1,11 @@
 // CourtIQ v5 — Google Auth + Player Profiles + Personal Schedule
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp as rtServerTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: window.__env?.FIREBASE_API_KEY || "AIzaSyDPDDpW7Hf0GqBuCXqvg9IeX9zVlaDOYeM",
+  apiKey: window.__env?.FIREBASE_API_KEY,
   authDomain: "pikleball-scoreboard.firebaseapp.com",
   projectId: "pikleball-scoreboard",
   storageBucket: "pikleball-scoreboard.firebasestorage.app",
@@ -432,28 +432,23 @@ async function renderUsers() {
     cont.innerHTML = '<div class="warn-box">⛔ Admin access only.</div>';
     return;
   }
-  // Show current user immediately while loading
-  const users = [];
-  if (currentUser) {
-    users.push({
-      uid: currentUser.uid,
-      name: currentUser.displayName,
-      email: currentUser.email,
-      photo: currentUser.photoURL,
-      createdAt: null
-    });
-  }
+  cont.innerHTML = '<p class="muted">Loading…</p>';
 
   try {
-    // Try loading all users from Firestore (may fail if rules block it)
-    try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      usersSnap.forEach(d => {
-        const u = d.data();
-        if (!users.find(x => x.uid === u.uid)) users.push(u);
+    // Load all users from Firestore
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const users = [];
+    usersSnap.forEach(d => users.push(d.data()));
+
+    // Always include current user even if not saved yet
+    if (currentUser && !users.find(u => u.uid === currentUser.uid)) {
+      users.unshift({
+        uid: currentUser.uid,
+        name: currentUser.displayName,
+        email: currentUser.email,
+        photo: currentUser.photoURL,
+        createdAt: null
       });
-    } catch(rulesErr) {
-      console.warn('Could not load all users (rules may restrict):', rulesErr.message);
     }
 
     if (users.length === 0) {
@@ -1092,15 +1087,6 @@ window.renderUsers = renderUsers;
 window.S = S;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-// Handle redirect result (for mobile)
-getRedirectResult(auth).then(async result => {
-  if (result?.user) {
-    currentUser = result.user;
-    await saveUserProfile(currentUser);
-    showToast('Welcome ' + currentUser.displayName + '!');
-  }
-}).catch(e => console.error('Redirect:', e));
-
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   renderAuthUI(user);

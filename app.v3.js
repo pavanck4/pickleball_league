@@ -143,8 +143,8 @@ function renderAuthUI(user) {
       authBtn.innerHTML = '<img src="' + (user.photoURL || '') + '" class="user-avatar"><span>' + (user.displayName || '').split(' ')[0] + '</span>';
       authBtn.onclick = () => gotoTab('profile', null);
     }
-    // Only show Players tab to admin
-    if (usersNav) usersNav.style.display = isAppAdmin() ? '' : 'none';
+    // Show Players tab to all logged in users, but content is admin-only
+    if (usersNav) usersNav.style.display = '';
   } else {
     if (loginWall) loginWall.style.display = '';
     if (mainApp) mainApp.style.display = 'none';
@@ -429,7 +429,7 @@ async function renderUsers() {
   const cont = document.getElementById('users-body');
   if (!cont) return;
   if (!isAppAdmin()) {
-    cont.innerHTML = '<div class="warn-box">⛔ Admin access only.</div>';
+    cont.innerHTML = '<div class="warn-box">⛔ Admin access only.<br><small>Your email: ' + (currentUser?.email || 'not logged in') + '</small></div>';
     return;
   }
   cont.innerHTML = '<p class="muted">Loading users…</p>';

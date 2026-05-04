@@ -432,23 +432,28 @@ async function renderUsers() {
     cont.innerHTML = '<div class="warn-box">⛔ Admin access only.</div>';
     return;
   }
-  cont.innerHTML = '<p class="muted">Loading…</p>';
+  // Show current user immediately while loading
+  const users = [];
+  if (currentUser) {
+    users.push({
+      uid: currentUser.uid,
+      name: currentUser.displayName,
+      email: currentUser.email,
+      photo: currentUser.photoURL,
+      createdAt: null
+    });
+  }
 
   try {
-    // Load all users from Firestore
-    const usersSnap = await getDocs(collection(db, 'users'));
-    const users = [];
-    usersSnap.forEach(d => users.push(d.data()));
-
-    // Always include current user even if not saved yet
-    if (currentUser && !users.find(u => u.uid === currentUser.uid)) {
-      users.unshift({
-        uid: currentUser.uid,
-        name: currentUser.displayName,
-        email: currentUser.email,
-        photo: currentUser.photoURL,
-        createdAt: null
+    // Try loading all users from Firestore (may fail if rules block it)
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.forEach(d => {
+        const u = d.data();
+        if (!users.find(x => x.uid === u.uid)) users.push(u);
       });
+    } catch(rulesErr) {
+      console.warn('Could not load all users (rules may restrict):', rulesErr.message);
     }
 
     if (users.length === 0) {

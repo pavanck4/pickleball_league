@@ -1,6 +1,7 @@
-// CourtIQ v4 — clean rewrite
+// CourtIQ v5 — Google Auth + Player Profiles + Personal Schedule
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: window.__env?.FIREBASE_API_KEY,
@@ -13,13 +14,14 @@ const firebaseConfig = {
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+const auth = getAuth(fbApp);
+const provider = new GoogleAuthProvider();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
 let activeRound = 0;
 let leagueCode = null;
-let adminPin = null;
-let isAdmin = false;
+let currentUser = null;
 let unsubscribe = null;
 let toastTimer = null;
 let isSaving = false;
@@ -67,16 +69,75 @@ function setSyncStatus(s) {
   else { el.className = 'sync-status'; el.textContent = ''; }
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function loginWithGoogle() {
+  try {
+    const result = await signInWithPopup(auth, provider);
+    currentUser = result.user;
+    await saveUserProfile(currentUser);
+    showToast('Welcome ' + currentUser.displayName + '!');
+  } catch (e) {
+    showToast('Login failed — ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+async function logout() {
+  await signOut(auth);
+  currentUser = null;
+  showToast('Logged out');
+}
+
+async function saveUserProfile(user) {
+  const ref = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      uid: user.uid,
+      name: user.displayName,
+      email: user.email,
+      photo: user.photoURL,
+      createdAt: serverTimestamp()
+    });
+  }
+}
+
+function renderAuthUI(user) {
+  const authBtn = document.getElementById('auth-btn');
+  const userInfo = document.getElementById('user-info');
+  const loginWall = document.getElementById('login-wall');
+  const mainApp = document.getElementById('main-app');
+
+  if (user) {
+    if (loginWall) loginWall.style.display = 'none';
+    if (mainApp) mainApp.style.display = '';
+    if (authBtn) {
+      authBtn.innerHTML = '<img src="' + (user.photoURL || '') + '" class="user-avatar"><span>' + (user.displayName || '').split(' ')[0] + '</span>';
+      authBtn.onclick = () => gotoTab('profile', null);
+    }
+  } else {
+    if (loginWall) loginWall.style.display = '';
+    if (mainApp) mainApp.style.display = 'none';
+    if (authBtn) {
+      authBtn.innerHTML = 'Sign in';
+      authBtn.onclick = loginWithGoogle;
+    }
+  }
+}
+
 // ── Tab Navigation ────────────────────────────────────────────────────────────
 function gotoTab(t, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + t).classList.add('active');
+  const tabEl = document.getElementById('tab-' + t);
+  if (tabEl) tabEl.classList.add('active');
   if (btn) btn.classList.add('active');
   else { const b = document.getElementById('nav-' + t); if (b) b.classList.add('active'); }
   if (t === 'standings') renderStandings();
   if (t === 'schedule') renderSchedule();
   if (t === 'history') loadHistory();
+  if (t === 'profile') renderProfile();
+  if (t === 'myschedule') renderMySchedule();
 }
 
 // ── Schedule Serialization ────────────────────────────────────────────────────
@@ -159,7 +220,10 @@ async function saveToFirebase() {
     const isComplete = doneM === totalM && totalM > 0;
     const standings = calcStandings(S);
     await setDoc(doc(db, 'leagues', leagueCode), {
-      ...toFirestore(S), leagueCode, adminPin, isComplete, standings, updatedAt: serverTimestamp()
+      ...toFirestore(S), leagueCode, isComplete, standings,
+      createdBy: currentUser?.uid,
+      members: S.players,
+      updatedAt: serverTimestamp()
     }, { merge: true });
     setSyncStatus('synced');
     localStorage.setItem('pickleball_last_code', leagueCode);
@@ -183,7 +247,6 @@ function subscribeToLeague(code) {
     if (!snap.exists() || isSaving) return;
     const data = snap.data();
     S = fromFirestore(data);
-    adminPin = data.adminPin || null;
     renderSchedule();
     renderStandings();
     updateBanner();
@@ -194,7 +257,7 @@ function subscribeToLeague(code) {
 async function joinLeague(silent) {
   const input = document.getElementById('join-code');
   const errEl = document.getElementById('join-err');
-  const code = (input.value || '').trim().toUpperCase();
+  const code = (input?.value || '').trim().toUpperCase();
   if (errEl) errEl.textContent = '';
   if (!code) { if (errEl && !silent) errEl.textContent = 'Enter a league code.'; return; }
   try {
@@ -205,15 +268,20 @@ async function joinLeague(silent) {
     }
     const data = snap.data();
     S = fromFirestore(data);
-    adminPin = data.adminPin || null;
     leagueCode = code;
     activeRound = 0;
     localStorage.setItem('pickleball_last_code', code);
-    const saved = sessionStorage.getItem('pk_admin_' + code);
-    setAdminMode(saved && saved === adminPin);
+
+    // Register this user as a member
+    if (currentUser) {
+      await setDoc(doc(db, 'leagues', code), {
+        memberUids: { [currentUser.uid]: { name: currentUser.displayName, joinedAt: serverTimestamp() } }
+      }, { merge: true });
+    }
+
     showLeagueUI();
     subscribeToLeague(code);
-    refreshPlayerInputs();
+    clearPlayerInputs();
     renderSchedule();
     renderStandings();
     updateBanner();
@@ -233,7 +301,7 @@ async function saveToHistory(standings) {
   try {
     const ref = doc(db, 'history', leagueCode);
     const existing = await getDoc(ref);
-    const data = { ...toFirestore(S), leagueCode, standings, isComplete: true, completedAt: serverTimestamp() };
+    const data = { ...toFirestore(S), leagueCode, standings, isComplete: true, completedAt: serverTimestamp(), createdBy: currentUser?.uid };
     if (!existing.exists()) data.createdAt = serverTimestamp();
     await setDoc(ref, data, { merge: true });
   } catch (e) { console.error('History save error:', e); }
@@ -324,14 +392,181 @@ function buildHistoryCard(d) {
   return card;
 }
 
+// ── Firebase: Player Profile ──────────────────────────────────────────────────
+async function renderProfile() {
+  const cont = document.getElementById('profile-body');
+  if (!cont || !currentUser) return;
+
+  cont.innerHTML = '<p class="muted">Loading profile…</p>';
+
+  try {
+    // Load all history and calculate stats for this user
+    const snap = await getDocs(query(collection(db, 'history'), orderBy('completedAt', 'desc')));
+    let totalWins = 0, totalLosses = 0, totalPts = 0, totalScored = 0, tournaments = 0;
+    let bestFinish = null;
+    const recentTournaments = [];
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const playerName = currentUser.displayName?.split(' ')[0];
+      // Find this player in standings
+      const standings = d.standings || [];
+      const idx = standings.findIndex(s =>
+        s.name?.toLowerCase() === playerName?.toLowerCase() ||
+        (d.players || []).some(p => p?.toLowerCase() === playerName?.toLowerCase())
+      );
+      if (idx === -1) return;
+      const s = standings[idx];
+      if (!s) return;
+      tournaments++;
+      totalWins += s.wins || 0;
+      totalLosses += s.losses || 0;
+      totalPts += s.pts || 0;
+      totalScored += s.scored || 0;
+      if (bestFinish === null || idx + 1 < bestFinish) bestFinish = idx + 1;
+      recentTournaments.push({ date: formatDate(d.completedAt), rank: idx + 1, total: standings.length, pts: s.pts, wins: s.wins, losses: s.losses, code: d.leagueCode });
+    });
+
+    const winRate = totalWins + totalLosses > 0 ? Math.round((totalWins / (totalWins + totalLosses)) * 100) : 0;
+    const medals = ['🥇', '🥈', '🥉'];
+
+    cont.innerHTML = `
+      <div class="profile-hero">
+        <img src="${currentUser.photoURL || ''}" class="profile-avatar" onerror="this.style.display='none'">
+        <div class="profile-info">
+          <div class="profile-name">${currentUser.displayName || 'Player'}</div>
+          <div class="profile-email">${currentUser.email || ''}</div>
+          <button class="btn-outline" style="margin-top:8px;padding:5px 14px;font-size:12px;" onclick="logout()">Sign out</button>
+        </div>
+      </div>
+
+      <div class="grid4" style="margin-top:1.25rem;">
+        <div class="metric"><div class="metric-val">${tournaments}</div><div class="metric-lbl">Tournaments</div></div>
+        <div class="metric"><div class="metric-val">${winRate}%</div><div class="metric-lbl">Win rate</div></div>
+        <div class="metric"><div class="metric-val">${totalWins}W ${totalLosses}L</div><div class="metric-lbl">Record</div></div>
+        <div class="metric"><div class="metric-val">${bestFinish ? (medals[bestFinish-1] || '#'+bestFinish) : '—'}</div><div class="metric-lbl">Best finish</div></div>
+      </div>
+
+      <h3 style="margin:1.25rem 0 10px;">Recent tournaments</h3>
+      ${recentTournaments.length === 0 ? '<p class="muted">No tournaments found. Make sure your player name matches your Google name.</p>' : ''}
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${recentTournaments.map(t => `
+          <div class="card" style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:13px;font-weight:500;">${t.date}</div>
+              <div style="font-size:12px;color:var(--text-secondary);">${t.code} · Rank #${t.rank} of ${t.total}</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <span style="font-size:13px;color:#0F6E56;font-weight:500;">${t.wins}W ${t.losses}L</span>
+              <span style="font-size:13px;font-weight:500;">${t.pts} pts</span>
+              <span style="font-size:18px;">${t.rank === 1 ? '🥇' : t.rank === 2 ? '🥈' : t.rank === 3 ? '🥉' : ''}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) {
+    cont.innerHTML = '<p class="muted">Could not load profile.</p>';
+    console.error(e);
+  }
+}
+
+// ── Personal Schedule ─────────────────────────────────────────────────────────
+function renderMySchedule() {
+  const cont = document.getElementById('myschedule-body');
+  if (!cont || !currentUser || !S.schedule.length) {
+    if (cont) cont.innerHTML = '<p class="muted">Join a league first to see your schedule.</p>';
+    return;
+  }
+
+  const myName = currentUser.displayName?.split(' ')[0]?.toLowerCase();
+  const matches = [];
+
+  S.schedule.forEach((round, ri) => {
+    round.forEach(match => {
+      let isMyMatch = false;
+      let myTeam = null, oppTeam = null;
+
+      if (match.type === 'fixed') {
+        const t1 = S.teams[match.t1], t2 = S.teams[match.t2];
+        const inT1 = t1?.players?.some(p => p?.toLowerCase().startsWith(myName));
+        const inT2 = t2?.players?.some(p => p?.toLowerCase().startsWith(myName));
+        if (inT1) { isMyMatch = true; myTeam = t1; oppTeam = t2; }
+        if (inT2) { isMyMatch = true; myTeam = t2; oppTeam = t1; }
+      } else {
+        const p1 = (match.t1pair || []).map(i => S.players[i]);
+        const p2 = (match.t2pair || []).map(i => S.players[i]);
+        const inP1 = p1.some(p => p?.toLowerCase().startsWith(myName));
+        const inP2 = p2.some(p => p?.toLowerCase().startsWith(myName));
+        if (inP1) { isMyMatch = true; myTeam = { name: p1.map(p=>p?.split(' ')[0]).join(' & '), players: p1 }; oppTeam = { name: p2.map(p=>p?.split(' ')[0]).join(' & '), players: p2 }; }
+        if (inP2) { isMyMatch = true; myTeam = { name: p2.map(p=>p?.split(' ')[0]).join(' & '), players: p2 }; oppTeam = { name: p1.map(p=>p?.split(' ')[0]).join(' & '), players: p1 }; }
+      }
+
+      if (isMyMatch) {
+        const res = S.results[match.id] || {};
+        matches.push({ round: ri + 1, match, myTeam, oppTeam, res });
+      }
+    });
+  });
+
+  if (matches.length === 0) {
+    cont.innerHTML = '<div class="info-box">Your name wasn\'t found in this league. Make sure your player name matches the first name on your Google account: <strong>' + currentUser.displayName?.split(' ')[0] + '</strong></div>';
+    return;
+  }
+
+  const totalM = matches.length;
+  const doneM = matches.filter(m => m.res.done).length;
+  const wins = matches.filter(m => {
+    if (!m.res.done) return false;
+    const s1 = parseInt(m.res.s1), s2 = parseInt(m.res.s2);
+    const myIsT1 = m.match.type === 'fixed' ? S.teams[m.match.t1]?.players?.some(p => p?.toLowerCase().startsWith(myName)) : (m.match.t1pair||[]).map(i=>S.players[i]).some(p=>p?.toLowerCase().startsWith(myName));
+    return myIsT1 ? s1 > s2 : s2 > s1;
+  }).length;
+
+  cont.innerHTML = `
+    <div class="profile-hero" style="margin-bottom:1.25rem;">
+      <img src="${currentUser.photoURL||''}" class="profile-avatar" onerror="this.style.display='none'">
+      <div class="profile-info">
+        <div class="profile-name">${currentUser.displayName?.split(' ')[0]}'s Schedule</div>
+        <div class="profile-email">League ${leagueCode} · ${doneM}/${totalM} played · ${wins} wins</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${matches.map(m => {
+        const done = m.res.done;
+        const s1 = parseInt(m.res.s1 || 0), s2 = parseInt(m.res.s2 || 0);
+        const myIsT1 = m.match.type === 'fixed'
+          ? S.teams[m.match.t1]?.players?.some(p => p?.toLowerCase().startsWith(myName))
+          : (m.match.t1pair||[]).map(i=>S.players[i]).some(p=>p?.toLowerCase().startsWith(myName));
+        const myScore = myIsT1 ? s1 : s2;
+        const oppScore = myIsT1 ? s2 : s1;
+        const won = done && myScore > oppScore;
+        const lost = done && myScore < oppScore;
+        return `
+          <div class="match-card" style="border-left:3px solid ${done ? (won?'#1D9E75':'#c0392b') : 'var(--border)'};">
+            <div class="match-header">
+              <span class="match-label">Round ${m.round}</span>
+              <span class="pill ${done ? (won?'pill-done':'pill-loss') : 'pill-pend'}">${done ? (won?'won':'lost') : 'upcoming'}</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div>
+                <div style="font-size:14px;font-weight:500;color:#0F6E56;">You (${m.myTeam.name})</div>
+                <div style="font-size:12px;color:var(--text-secondary);">vs ${m.oppTeam.name}</div>
+                <div style="font-size:11px;color:var(--text-tertiary);">${m.oppTeam.players?.join(' & ') || ''}</div>
+              </div>
+              ${done ? `<div style="font-size:24px;font-weight:600;font-family:'DM Serif Display',serif;color:${won?'#0F6E56':'#c0392b'}">${myScore} — ${oppScore}</div>` : '<div style="font-size:13px;color:var(--text-tertiary);">Score pending</div>'}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
 // ── Firebase: Groups ──────────────────────────────────────────────────────────
 async function loadGroupsFromFirebase() {
-  // Show local cache immediately
   try {
     const local = JSON.parse(localStorage.getItem('courtiq_groups') || '[]');
     if (Array.isArray(local) && local.length) { cachedGroups = local; renderGroups(); }
   } catch (e) {}
-  // Fetch from Firebase
   try {
     const snap = await getDoc(doc(db, 'groups', 'shared'));
     if (snap.exists() && Array.isArray(snap.data().list)) {
@@ -348,10 +583,7 @@ async function saveGroups(groups) {
   try {
     await setDoc(doc(db, 'groups', 'shared'), { list: groups, updatedAt: serverTimestamp() });
     return true;
-  } catch (e) {
-    console.error('Groups save error:', e);
-    return false;
-  }
+  } catch (e) { console.error('Groups save error:', e); return false; }
 }
 
 async function saveCurrentAsGroup(editIdx) {
@@ -392,9 +624,7 @@ async function deleteGroup(idx) {
   showToast('Group deleted');
 }
 
-function editGroup(idx) {
-  saveCurrentAsGroup(idx);
-}
+function editGroup(idx) { saveCurrentAsGroup(idx); }
 
 function renderGroups() {
   const wrap = document.getElementById('groups-wrap');
@@ -415,49 +645,6 @@ function renderGroups() {
   ).join('');
 }
 
-// ── PIN Modal ─────────────────────────────────────────────────────────────────
-function showPinModal(mode, onSuccess) {
-  const overlay = document.getElementById('pin-overlay');
-  const title = document.getElementById('pin-modal-title');
-  const desc = document.getElementById('pin-modal-desc');
-  const input = document.getElementById('pin-input');
-  const errEl = document.getElementById('pin-err');
-  title.textContent = mode === 'create' ? 'Set admin PIN' : 'Enter admin PIN';
-  desc.textContent = mode === 'create' ? 'Create a 4-digit PIN. Share it with players who can enter scores.' : 'Enter the 4-digit PIN to unlock score entry.';
-  input.value = '';
-  errEl.textContent = '';
-  overlay.style.display = 'flex';
-  setTimeout(() => input.focus(), 100);
-  document.getElementById('pin-confirm-btn').onclick = () => {
-    const val = input.value.trim();
-    if (!/^\d{4}$/.test(val)) { errEl.textContent = 'PIN must be 4 digits.'; return; }
-    overlay.style.display = 'none';
-    onSuccess(val);
-  };
-  document.getElementById('pin-cancel-btn').onclick = () => { overlay.style.display = 'none'; };
-  input.onkeydown = e => { if (e.key === 'Enter') document.getElementById('pin-confirm-btn').click(); };
-}
-
-function promptAdminPin() {
-  if (!leagueCode || !adminPin) return;
-  showPinModal('enter', val => {
-    if (val === adminPin) {
-      setAdminMode(true);
-      sessionStorage.setItem('pk_admin_' + leagueCode, val);
-      showToast('Admin access granted!');
-    } else {
-      showToast('Incorrect PIN', 'error');
-    }
-  });
-}
-
-function setAdminMode(val) {
-  isAdmin = val;
-  const badge = document.getElementById('admin-badge');
-  if (badge) badge.style.display = val ? '' : 'none';
-  if (S.schedule.length) renderSchedule();
-}
-
 // ── League Setup ──────────────────────────────────────────────────────────────
 function selectMode(m) {
   S.mode = m;
@@ -472,17 +659,29 @@ function refreshPlayerInputs(preload) {
   n = Math.max(4, Math.min(20, n));
   const cont = document.getElementById('player-inputs');
   if (!cont) return;
-  // Only carry over existing values if a group is being loaded (preload provided)
-  // Otherwise keep whatever is already typed (e.g. when switching mode or changing count)
   const existing = preload || Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
   cont.innerHTML = '';
   for (let i = 0; i < n; i++) {
     const row = document.createElement('div');
     row.className = 'player-row';
     const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
-    // Only pre-fill if preload was given (loading a group), otherwise empty
-    const val = preload ? (existing[i] || '') : (existing[i] || '');
-    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="' + val + '" id="pi' + i + '">' + lbl;
+    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="' + (existing[i] || '') + '" id="pi' + i + '">' + lbl;
+    cont.appendChild(row);
+  }
+}
+
+function clearPlayerInputs() {
+  let n = parseInt(document.getElementById('inp-n').value) || 6;
+  if (n % 2 !== 0) n++;
+  n = Math.max(4, Math.min(20, n));
+  const cont = document.getElementById('player-inputs');
+  if (!cont) return;
+  cont.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement('div');
+    row.className = 'player-row';
+    const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
+    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" id="pi' + i + '">' + lbl;
     cont.appendChild(row);
   }
 }
@@ -492,6 +691,9 @@ function showLeagueUI() {
   document.getElementById('saved-banner').style.display = '';
   document.getElementById('share-box').style.display = '';
   document.getElementById('league-code-display').textContent = leagueCode;
+  // Show My Schedule nav
+  const mySchedNav = document.getElementById('nav-myschedule');
+  if (mySchedNav) mySchedNav.style.display = '';
   setSyncStatus('synced');
   updateBanner();
 }
@@ -509,19 +711,19 @@ function copyCode() {
 }
 
 function confirmReset() {
-  if (!isAdmin) { showToast('Admin PIN required', 'error'); return; }
   if (!confirm('Reset the league? All scores will be cleared.')) return;
   if (unsubscribe) unsubscribe();
-  leagueCode = null; adminPin = null;
+  leagueCode = null;
   S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
   activeRound = 0;
   localStorage.removeItem('pickleball_last_code');
   document.getElementById('reset-btn').style.display = 'none';
   document.getElementById('saved-banner').style.display = 'none';
   document.getElementById('share-box').style.display = 'none';
+  const mySchedNav = document.getElementById('nav-myschedule');
+  if (mySchedNav) mySchedNav.style.display = 'none';
   document.getElementById('join-code').value = '';
   setSyncStatus('');
-  setAdminMode(false);
   clearPlayerInputs();
   document.getElementById('matches-list').innerHTML = '';
   document.getElementById('standings-body').innerHTML = '';
@@ -529,31 +731,26 @@ function confirmReset() {
 }
 
 // ── League Generation ─────────────────────────────────────────────────────────
-function generateLeague() {
+async function generateLeague() {
   const n = parseInt(document.getElementById('inp-n').value) || 6;
   const rounds = parseInt(document.getElementById('inp-r').value) || 3;
   const errEl = document.getElementById('setup-err');
   errEl.textContent = '';
   if (n < 4 || n % 2 !== 0) { errEl.textContent = 'Need an even number of players (min 4).'; return; }
   if (rounds < 1) { errEl.textContent = 'Need at least 1 round.'; return; }
-  showPinModal('create', async pin => {
-    const players = [];
-    for (let i = 0; i < n; i++) players.push((document.getElementById('pi' + i)?.value || '').trim() || 'Player ' + (i + 1));
-    S.players = players; S.rounds = rounds; S.results = {};
-    if (S.mode === 'fixed') generateFixed(players, rounds);
-    else generateRotating(players, rounds);
-    activeRound = 0;
-    adminPin = pin;
-    leagueCode = generateCode();
-    setAdminMode(true);
-    sessionStorage.setItem('pk_admin_' + leagueCode, pin);
-    showLeagueUI();
-    await saveToFirebase();
-    subscribeToLeague(leagueCode);
-    renderSchedule();
-    renderStandings();
-    gotoTab('schedule', document.getElementById('nav-schedule'));
-  });
+  const players = [];
+  for (let i = 0; i < n; i++) players.push((document.getElementById('pi' + i)?.value || '').trim() || 'Player ' + (i + 1));
+  S.players = players; S.rounds = rounds; S.results = {};
+  if (S.mode === 'fixed') generateFixed(players, rounds);
+  else generateRotating(players, rounds);
+  activeRound = 0;
+  leagueCode = generateCode();
+  showLeagueUI();
+  await saveToFirebase();
+  subscribeToLeague(leagueCode);
+  renderSchedule();
+  renderStandings();
+  gotoTab('schedule', document.getElementById('nav-schedule'));
 }
 
 function generateFixed(players, rounds) {
@@ -651,12 +848,12 @@ function validateScore(s1, s2) {
 }
 
 async function submitScore(mid) {
-  if (!isAdmin) { showToast('Enter PIN to add scores', 'error'); promptAdminPin(); return; }
+  if (!currentUser) { showToast('Sign in to add scores', 'error'); return; }
   const s1 = parseInt(document.getElementById('s1-' + mid)?.value);
   const s2 = parseInt(document.getElementById('s2-' + mid)?.value);
   const err = validateScore(s1, s2);
   if (err) { document.getElementById('err-' + mid).textContent = err; return; }
-  S.results[mid] = { s1, s2, done: true };
+  S.results[mid] = { s1, s2, done: true, enteredBy: currentUser.uid };
   updateBanner();
   await saveToFirebase();
   renderSchedule();
@@ -681,13 +878,6 @@ function renderSchedule() {
   const round = S.schedule[activeRound];
   if (!round || !round.length) { cont.innerHTML = '<p class="muted">No matches this round.</p>'; return; }
 
-  const bar = document.createElement('div');
-  bar.className = 'access-bar ' + (isAdmin ? 'admin' : 'viewer');
-  bar.innerHTML = isAdmin
-    ? '🔓 Admin — you can enter scores'
-    : '👁 View only — <button class="btn-unlock" onclick="promptAdminPin()">Enter PIN to add scores</button>';
-  cont.appendChild(bar);
-
   const note = document.createElement('div');
   note.className = S.mode === 'rotate' ? 'warn-box' : 'info-box';
   note.textContent = S.mode === 'rotate' ? 'Rotating partners — new pairs each round.' : 'Fixed partners — same teams throughout.';
@@ -699,7 +889,7 @@ function renderSchedule() {
     const winner = getWinner(match.id);
     const mc = document.createElement('div');
     mc.className = 'match-card';
-    const scoreSection = isAdmin && !res.done
+    const scoreSection = currentUser && !res.done
       ? '<div class="score-row">'
         + '<span class="score-label">' + t1.name + '</span>'
         + '<input type="number" class="score-inp" min="0" max="99" value="' + res.s1 + '" placeholder="0" id="s1-' + match.id + '" oninput="S.results[\'' + match.id + '\'].s1=this.value;document.getElementById(\'err-' + match.id + '\').textContent=\'\';">'
@@ -710,7 +900,9 @@ function renderSchedule() {
         + '</div><div id="err-' + match.id + '" class="match-err"></div>'
       : res.done
         ? '<div class="score-display"><span class="score-num ' + (winner===1?'score-win':'') + '">' + res.s1 + '</span><span class="score-sep-display">—</span><span class="score-num ' + (winner===2?'score-win':'') + '">' + res.s2 + '</span></div>'
-        : '<div class="score-pending-msg">Score not entered yet</div>';
+        : !currentUser
+          ? '<div class="score-pending-msg">Sign in to enter scores</div>'
+          : '<div class="score-pending-msg">Score not entered yet</div>';
     mc.innerHTML = '<div class="match-header"><span class="match-label">Match · ' + match.id + '</span><span class="pill ' + (res.done?'pill-done':'pill-pend') + '">' + (res.done?'completed':'pending') + '</span></div>'
       + '<div class="match-grid"><div class="team-box"><div class="team-name">' + t1.name + ' ' + (winner===1?'<span class="win-tag">winner</span>':'') + '</div><div class="team-players">' + t1.players.join(' & ') + '</div></div>'
       + '<div class="vs-label">vs</div>'
@@ -730,9 +922,7 @@ function renderStandings() {
   const allDone = doneM === totalM && totalM > 0;
   const standings = calcStandings(S);
   const isFixed = S.mode === 'fixed';
-
   if (allDone && leagueCode) saveToHistory(standings);
-
   const ph = isFixed ? '<th>Players</th>' : '';
   const rows = standings.map((s, i) => {
     const rc = i===0?'r1':i===1?'r2':i===2?'r3':'';
@@ -742,7 +932,6 @@ function renderStandings() {
       + '<td>' + s.played + '</td><td class="td-win">' + s.wins + '</td><td class="td-loss">' + s.losses + '</td>'
       + '<td style="font-weight:500">' + s.pts + '</td><td class="' + dc + '">' + (s.diff>=0?'+':'') + s.diff + '</td><td>' + (s.scored||0) + '</td></tr>';
   }).join('');
-
   cont.innerHTML = '<div class="grid4">'
     + '<div class="metric"><div class="metric-val">' + (isFixed?S.teams.length:S.players.length) + '</div><div class="metric-lbl">' + (isFixed?'Teams':'Players') + '</div></div>'
     + '<div class="metric"><div class="metric-val">' + S.rounds + '</div><div class="metric-lbl">Rounds</div></div>'
@@ -766,42 +955,27 @@ window.joinLeague = joinLeague;
 window.submitScore = submitScore;
 window.confirmReset = confirmReset;
 window.copyCode = copyCode;
-window.promptAdminPin = promptAdminPin;
 window.forceSaveHistory = forceSaveHistory;
 window.saveCurrentAsGroup = saveCurrentAsGroup;
 window.loadGroup = loadGroup;
 window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
-window.clearPlayerInputs = clearPlayerInputs;
+window.loginWithGoogle = loginWithGoogle;
+window.logout = logout;
 window.S = S;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-async function init() {
-  // Start with empty player inputs
-  clearPlayerInputs();
-  await loadGroupsFromFirebase();
-  const lastCode = localStorage.getItem('pickleball_last_code');
-  if (lastCode) {
-    document.getElementById('join-code').value = lastCode;
-    await joinLeague(true);
+onAuthStateChanged(auth, async user => {
+  currentUser = user;
+  renderAuthUI(user);
+  if (user) {
+    clearPlayerInputs();
+    await loadGroupsFromFirebase();
+    const lastCode = localStorage.getItem('pickleball_last_code');
+    if (lastCode) {
+      document.getElementById('join-code').value = lastCode;
+      await joinLeague(true);
+    }
   }
-}
-
-function clearPlayerInputs() {
-  let n = parseInt(document.getElementById('inp-n').value) || 6;
-  if (n % 2 !== 0) n++;
-  n = Math.max(4, Math.min(20, n));
-  const cont = document.getElementById('player-inputs');
-  if (!cont) return;
-  cont.innerHTML = '';
-  for (let i = 0; i < n; i++) {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
-    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="" id="pi' + i + '">' + lbl;
-    cont.appendChild(row);
-  }
-}
-
-init();
+});

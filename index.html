@@ -10,7 +10,7 @@
 <body>
 
 <!-- LOGIN WALL -->
-<div id="login-wall" class="login-wall" style="display:none;">
+<div id="login-wall" class="login-wall">
   <div class="login-card">
     <div class="login-logo">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
@@ -190,7 +190,11 @@
 </div>
 
 <div class="toast" id="toast">✓ Saved</div>
-<script src="config.js"></script>
+<script>
+  // Load config.js if available, otherwise use empty env
+  window.__env = window.__env || {};
+</script>
+<script src="config.js" onerror="console.warn('config.js not found — Firebase API key missing')"></script>
 <script type="module" src="app.v3.js"></script>
 </body>
 </html>

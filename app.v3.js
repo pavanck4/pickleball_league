@@ -1,11 +1,11 @@
 // CourtIQ v5 — Google Auth + Player Profiles + Personal Schedule
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp as rtServerTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: window.__env?.FIREBASE_API_KEY,
+  apiKey: window.__env?.FIREBASE_API_KEY || "AIzaSyDPDDpW7Hf0GqBuCXqvg9IeX9zVlaDOYeM",
   authDomain: "pikleball-scoreboard.firebaseapp.com",
   projectId: "pikleball-scoreboard",
   storageBucket: "pikleball-scoreboard.firebasestorage.app",
@@ -432,23 +432,28 @@ async function renderUsers() {
     cont.innerHTML = '<div class="warn-box">⛔ Admin access only.</div>';
     return;
   }
-  cont.innerHTML = '<p class="muted">Loading…</p>';
+  // Show current user immediately while loading
+  const users = [];
+  if (currentUser) {
+    users.push({
+      uid: currentUser.uid,
+      name: currentUser.displayName,
+      email: currentUser.email,
+      photo: currentUser.photoURL,
+      createdAt: null
+    });
+  }
 
   try {
-    // Load all users from Firestore
-    const usersSnap = await getDocs(collection(db, 'users'));
-    const users = [];
-    usersSnap.forEach(d => users.push(d.data()));
-
-    // Always include current user even if not saved yet
-    if (currentUser && !users.find(u => u.uid === currentUser.uid)) {
-      users.unshift({
-        uid: currentUser.uid,
-        name: currentUser.displayName,
-        email: currentUser.email,
-        photo: currentUser.photoURL,
-        createdAt: null
+    // Try loading all users from Firestore (may fail if rules block it)
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.forEach(d => {
+        const u = d.data();
+        if (!users.find(x => x.uid === u.uid)) users.push(u);
       });
+    } catch(rulesErr) {
+      console.warn('Could not load all users (rules may restrict):', rulesErr.message);
     }
 
     if (users.length === 0) {
@@ -466,7 +471,7 @@ async function renderUsers() {
         const isOnline = p[u.uid]?.online === true;
         return '<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:12px;">'
           + '<div style="position:relative;flex-shrink:0;">'
-          + '<img src="' + (u.photo||'') + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#e8ede8;" onerror="this.style.display='none'">'
+          + '<img src="' + (u.photo||'') + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#e8ede8;" onerror="this.style.display=\'none\'">'
           + '<div style="position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;background:' + (isOnline?'#1D9E75':'#ccc') + ';border:2px solid #fff;"></div>'
           + '</div>'
           + '<div style="flex:1;">'
@@ -1087,6 +1092,15 @@ window.renderUsers = renderUsers;
 window.S = S;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Handle redirect result (for mobile)
+getRedirectResult(auth).then(async result => {
+  if (result?.user) {
+    currentUser = result.user;
+    await saveUserProfile(currentUser);
+    showToast('Welcome ' + currentUser.displayName + '!');
+  }
+}).catch(e => console.error('Redirect:', e));
+
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   renderAuthUI(user);

@@ -11,9 +11,7 @@
 
 <!-- LOGIN WALL -->
 <div id="login-wall" class="login-wall">
-  <!-- Inline SVG court background -->
   <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:0.12;" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-    <rect width="400" height="700" fill="none"/>
     <rect x="30" y="80" width="340" height="540" fill="none" stroke="white" stroke-width="2"/>
     <line x1="200" y1="80" x2="200" y2="620" stroke="white" stroke-width="1.5"/>
     <line x1="30" y1="215" x2="370" y2="215" stroke="white" stroke-width="1.5"/>
@@ -21,7 +19,6 @@
     <line x1="30" y1="350" x2="370" y2="350" stroke="white" stroke-width="3" stroke-dasharray="8,5"/>
     <line x1="30" y1="345" x2="30" y2="355" stroke="white" stroke-width="4"/>
     <line x1="370" y1="345" x2="370" y2="355" stroke="white" stroke-width="4"/>
-    <!-- Balls -->
     <circle cx="120" cy="160" r="18" fill="white" opacity="0.3"/>
     <circle cx="280" cy="500" r="14" fill="white" opacity="0.2"/>
     <circle cx="320" cy="200" r="10" fill="white" opacity="0.15"/>
@@ -30,10 +27,8 @@
     <div class="login-logo" style="position:relative;">
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
         <rect width="56" height="56" rx="16" fill="#1D9E75"/>
-        <!-- Pickleball with holes pattern -->
         <circle cx="28" cy="28" r="16" stroke="white" stroke-width="2.5" fill="none"/>
         <circle cx="28" cy="28" r="10" stroke="rgba(255,255,255,0.4)" stroke-width="1" fill="none"/>
-        <!-- Holes on pickleball -->
         <circle cx="22" cy="22" r="1.5" fill="white" opacity="0.7"/>
         <circle cx="28" cy="20" r="1.5" fill="white" opacity="0.7"/>
         <circle cx="34" cy="22" r="1.5" fill="white" opacity="0.7"/>
@@ -43,10 +38,8 @@
         <circle cx="22" cy="34" r="1.5" fill="white" opacity="0.7"/>
         <circle cx="28" cy="36" r="1.5" fill="white" opacity="0.7"/>
         <circle cx="34" cy="34" r="1.5" fill="white" opacity="0.7"/>
-        <!-- Paddle handle -->
         <path d="M38 38 L46 46" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
       </svg>
-      <!-- Floating mini balls around logo -->
       <div style="position:absolute;top:-8px;right:-8px;width:16px;height:16px;background:#1D9E75;border-radius:50%;border:2px solid rgba(255,255,255,0.3);opacity:0.8;"></div>
       <div style="position:absolute;bottom:-4px;left:-8px;width:12px;height:12px;background:#378ADD;border-radius:50%;opacity:0.6;"></div>
     </div>
@@ -66,37 +59,17 @@
   <div style="background:#fff;border-radius:20px;padding:2rem;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
     <div style="font-size:48px;margin-bottom:12px;">⭐</div>
     <h2 style="font-family:'DM Serif Display',serif;font-size:22px;margin-bottom:8px;">Upgrade to Pro</h2>
-    <p style="font-size:14px;color:#5a5a56;margin-bottom:1.5rem;line-height:1.6;">You've reached the <strong>8 player limit</strong> on the free plan. Upgrade to Pro for unlimited players and more!</p>
-
+    <p style="font-size:14px;color:#5a5a56;margin-bottom:1.5rem;line-height:1.6;">You've reached the <strong>8 player limit</strong> on the free plan.</p>
     <div style="background:#f4f3ef;border-radius:12px;padding:1rem;margin-bottom:1.5rem;">
       <div style="font-size:32px;font-weight:600;color:#1a1a18;font-family:'DM Serif Display',serif;">$3<span style="font-size:16px;font-weight:400;color:#5a5a56;">/month</span></div>
-      <div style="font-size:13px;color:#5a5a56;margin-top:4px;">Cancel anytime</div>
     </div>
-
-    <div style="text-align:left;margin-bottom:1.5rem;">
-      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Unlimited players per league</div>
-      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Unlimited rounds</div>
-      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Full tournament history</div>
-      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Player profiles & stats</div>
-      <div style="font-size:13px;color:#1a1a18;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Priority support</div>
-    </div>
-
-    <a href="https://buy.stripe.com/PLACEHOLDER" target="_blank"
-      style="display:block;width:100%;padding:13px;background:#1D9E75;color:#fff;border-radius:10px;font-size:15px;font-weight:500;text-decoration:none;margin-bottom:10px;font-family:'DM Sans',sans-serif;">
-      Upgrade to Pro — $3/month
-    </a>
-    <button onclick="hideUpgradeModal()"
-      style="width:100%;padding:10px;background:transparent;border:0.5px solid #ccc;border-radius:10px;font-size:14px;color:#5a5a56;cursor:pointer;font-family:'DM Sans',sans-serif;">
-      Maybe later
-    </button>
-    <p style="font-size:11px;color:#9a9a94;margin-top:12px;">After payment, your account upgrades automatically within a few minutes.</p>
+    <button onclick="hideUpgradeModal()" style="width:100%;padding:10px;background:transparent;border:0.5px solid #ccc;border-radius:10px;font-size:14px;color:#5a5a56;cursor:pointer;font-family:'DM Sans',sans-serif;">Maybe later</button>
   </div>
 </div>
 
 <!-- MAIN APP -->
 <div id="main-app" style="display:none;">
 
-  <!-- Floating pickleball decorations -->
   <div class="ball-decoration" style="background:#1D9E75;"></div>
   <div class="ball-decoration" style="background:#378ADD;"></div>
   <div class="ball-decoration" style="background:#1D9E75;"></div>
@@ -141,6 +114,50 @@
 
     <!-- SETUP TAB -->
     <div id="tab-setup" class="section active">
+
+      <!-- Hero Banner with inline SVG pickleball court -->
+      <div class="hero-banner">
+        <svg class="hero-court-svg" viewBox="0 0 600 160" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+          <rect width="600" height="160" fill="#0d3520"/>
+          <rect x="20" y="12" width="560" height="136" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+          <line x1="300" y1="12" x2="300" y2="148" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+          <line x1="20" y1="58" x2="300" y2="58" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <line x1="300" y1="58" x2="580" y2="58" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <line x1="20" y1="102" x2="300" y2="102" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <line x1="300" y1="102" x2="580" y2="102" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <line x1="20" y1="80" x2="580" y2="80" stroke="rgba(255,255,255,0.3)" stroke-width="2.5" stroke-dasharray="6,4"/>
+          <line x1="20" y1="74" x2="20" y2="86" stroke="rgba(255,255,255,0.4)" stroke-width="3.5"/>
+          <line x1="580" y1="74" x2="580" y2="86" stroke="rgba(255,255,255,0.4)" stroke-width="3.5"/>
+          <circle cx="160" cy="42" r="10" fill="#1D9E75" opacity="0.8"/>
+          <circle cx="160" cy="42" r="10" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+          <circle cx="156" cy="38" r="2" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="164" cy="38" r="2" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="160" cy="46" r="2" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="156" cy="46" r="2" fill="rgba(255,255,255,0.5)"/>
+          <circle cx="164" cy="46" r="2" fill="rgba(255,255,255,0.5)"/>
+          <circle cx="450" cy="128" r="8" fill="#EF9F27" opacity="0.7"/>
+          <circle cx="450" cy="128" r="8" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+          <circle cx="447" cy="125" r="1.5" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="453" cy="125" r="1.5" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="450" cy="131" r="1.5" fill="rgba(255,255,255,0.7)"/>
+          <rect x="470" y="22" width="28" height="40" rx="14" fill="rgba(255,255,255,0.08)" transform="rotate(-20 484 42)"/>
+          <rect x="481" y="58" width="6" height="18" rx="3" fill="rgba(255,255,255,0.06)" transform="rotate(-20 484 67)"/>
+          <rect x="100" y="110" width="22" height="32" rx="11" fill="rgba(255,255,255,0.06)" transform="rotate(15 111 126)"/>
+          <rect x="108" y="138" width="5" height="14" rx="2.5" fill="rgba(255,255,255,0.04)" transform="rotate(15 110 145)"/>
+        </svg>
+        <div class="hero-content">
+          <div class="hero-text">
+            <h2 class="hero-title">Play. Score. Win.</h2>
+            <p class="hero-sub">Run your pickleball league with real-time scores, live standings and tournament history.</p>
+          </div>
+          <div class="hero-balls">
+            <div class="hero-ball b1"></div>
+            <div class="hero-ball b2"></div>
+            <div class="hero-ball b3"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <h3>Join an existing league</h3>
         <p style="font-size:13px;color:#5a5a56;margin-bottom:12px;">Have a league code? Enter it to join and view live scores.</p>
@@ -273,10 +290,9 @@
 
 <div class="toast" id="toast">✓ Saved</div>
 <script>
-  // Load config.js if available, otherwise use empty env
   window.__env = window.__env || {};
 </script>
-<script src="config.js" onerror="console.warn('config.js not found — Firebase API key missing')"></script>
+<script src="config.js" onerror="console.warn('config.js not found')"></script>
 <script type="module" src="app.v3.js"></script>
 </body>
 </html>

@@ -42,7 +42,9 @@ body {
 
 /* ── Hero Header ── */
 .header {
-  background: linear-gradient(135deg, #0a1f14 0%, #0d2d1e 50%, #0f3824 100%);
+  background:
+    linear-gradient(135deg, rgba(10,31,20,0.97) 0%, rgba(13,45,30,0.97) 50%, rgba(15,56,36,0.97) 100%),
+    url('https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=800&q=60') center/cover no-repeat;
   padding: 0;
   position: sticky;
   top: 0;
@@ -824,11 +826,13 @@ input:focus {
 
 /* ── Pickleball Visual Theme ── */
 
-/* Animated pickleball SVG background on login wall */
+/* Login wall with pickleball court image */
 .login-wall {
-  background: linear-gradient(160deg, #0a1f14 0%, #0d2d1e 40%, #1a3a25 70%, #0f2d1e 100%) !important;
   position: relative;
   overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(10,31,20,0.92) 0%, rgba(13,45,30,0.88) 50%, rgba(15,56,36,0.85) 100%),
+    url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80') center/cover no-repeat !important;
 }
 
 .login-wall::before {
@@ -836,13 +840,11 @@ input:focus {
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(circle at 25% 25%, rgba(29,158,117,0.2) 0%, transparent 40%),
-    radial-gradient(circle at 75% 75%, rgba(29,158,117,0.15) 0%, transparent 40%),
-    radial-gradient(circle at 75% 25%, rgba(255,255,255,0.03) 0%, transparent 30%);
+    radial-gradient(circle at 25% 25%, rgba(29,158,117,0.25) 0%, transparent 45%),
+    radial-gradient(circle at 75% 75%, rgba(29,158,117,0.2) 0%, transparent 45%);
   pointer-events: none;
 }
 
-/* Court lines on login wall */
 .login-wall::after {
   content: '';
   position: absolute;
@@ -1020,3 +1022,104 @@ input:focus {
 
 /* Container needs position relative for ball decorations */
 .app { position: relative; }
+
+/* ── Hero Banner ── */
+.hero-banner {
+  background:
+    linear-gradient(135deg, rgba(10,31,20,0.85) 0%, rgba(13,45,30,0.8) 100%),
+    url('https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=1200&q=80') center/cover no-repeat;
+  border-radius: var(--radius-xl);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  position: relative;
+  min-height: 140px;
+}
+
+.hero-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #ffffff;
+  margin-bottom: 6px;
+  line-height: 1.1;
+}
+
+.hero-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.hero-balls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.hero-ball {
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  position: relative;
+  animation: float 4s ease-in-out infinite;
+}
+
+.hero-ball::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.4), transparent 60%);
+}
+
+.hero-ball.b1 {
+  width: 52px; height: 52px;
+  background: radial-gradient(circle at 35% 35%, #2bc48a, #0F6E56);
+  animation-delay: 0s;
+}
+
+.hero-ball.b2 {
+  width: 36px; height: 36px;
+  background: radial-gradient(circle at 35% 35%, #5aadf0, #185FA5);
+  animation-delay: 1s;
+  animation-duration: 5s;
+}
+
+.hero-ball.b3 {
+  width: 28px; height: 28px;
+  background: radial-gradient(circle at 35% 35%, #f5b942, #d97706);
+  animation-delay: 2s;
+  animation-duration: 6s;
+}
+
+/* Add hole dots to hero balls */
+.hero-ball.b1::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image:
+    radial-gradient(circle 2px at 35% 35%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(circle 2px at 65% 35%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(circle 2px at 35% 65%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(circle 2px at 65% 65%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(circle 2px at 50% 50%, rgba(255,255,255,0.6) 0%, transparent 100%);
+}
+
+@media (max-width: 560px) {
+  .hero-content { padding: 1.25rem 1.25rem; }
+  .hero-title { font-size: 22px; }
+  .hero-sub { font-size: 12px; }
+  .hero-ball.b2, .hero-ball.b3 { display: none; }
+  .hero-ball.b1 { width: 44px; height: 44px; }
+}

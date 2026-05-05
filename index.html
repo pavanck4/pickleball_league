@@ -115,20 +115,43 @@
     <!-- SETUP TAB -->
     <div id="tab-setup" class="section active">
 
-      <!-- Hero Banner with inline SVG pickleball court -->
-      <div class="hero-banner">
-        <img class="hero-court-svg" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Pickleball_court.jpg/1280px-Pickleball_court.jpg" alt="Pickleball court" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;">
-        <div class="hero-content">
-          <div class="hero-text">
-            <h2 class="hero-title">Play. Score. Win.</h2>
-            <p class="hero-sub">Run your pickleball league with real-time scores, live standings and tournament history.</p>
-          </div>
-          <div class="hero-balls">
-            <div class="hero-ball b1"></div>
-            <div class="hero-ball b2"></div>
-            <div class="hero-ball b3"></div>
-          </div>
-        </div>
+      <div class="hero-banner" style="border-radius:16px;margin-bottom:1.5rem;overflow:hidden;position:relative;">
+        <svg width="100%" viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+          <rect width="680" height="200" fill="#2563a8"/>
+          <rect x="40" y="30" width="260" height="70" fill="#1d4ed8" opacity="0.6"/>
+          <rect x="380" y="30" width="260" height="70" fill="#1d4ed8" opacity="0.6"/>
+          <rect x="40" y="100" width="260" height="70" fill="#1d4ed8" opacity="0.6"/>
+          <rect x="380" y="100" width="260" height="70" fill="#1d4ed8" opacity="0.6"/>
+          <rect x="0" y="0" width="40" height="200" fill="#16a34a"/>
+          <rect x="640" y="0" width="40" height="200" fill="#16a34a"/>
+          <rect x="0" y="0" width="680" height="30" fill="#16a34a"/>
+          <rect x="0" y="170" width="680" height="30" fill="#16a34a"/>
+          <rect x="40" y="30" width="600" height="140" fill="none" stroke="white" stroke-width="3"/>
+          <line x1="340" y1="30" x2="340" y2="170" stroke="white" stroke-width="2.5"/>
+          <line x1="40" y1="100" x2="640" y2="100" stroke="white" stroke-width="2.5"/>
+          <line x1="190" y1="100" x2="190" y2="170" stroke="white" stroke-width="2"/>
+          <line x1="490" y1="100" x2="490" y2="170" stroke="white" stroke-width="2"/>
+          <rect x="40" y="94" width="600" height="12" fill="#1a1a1a" rx="2" opacity="0.85"/>
+          <rect x="33" y="80" width="7" height="40" fill="#555" rx="2"/>
+          <rect x="640" y="80" width="7" height="40" fill="#555" rx="2"/>
+          <circle cx="150" cy="65" r="12" fill="#1D9E75"/>
+          <circle cx="150" cy="65" r="12" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+          <circle cx="146" cy="61" r="2.2" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="154" cy="61" r="2.2" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="150" cy="68" r="2.2" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="530" cy="140" r="10" fill="#EAB308"/>
+          <circle cx="526" cy="137" r="1.8" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="533" cy="137" r="1.8" fill="rgba(255,255,255,0.7)"/>
+          <circle cx="530" cy="143" r="1.8" fill="rgba(255,255,255,0.7)"/>
+          <rect x="70" y="120" width="36" height="52" rx="18" fill="#c84b11" opacity="0.85" transform="rotate(-25 88 146)"/>
+          <rect x="84" y="166" width="10" height="22" rx="5" fill="#7c2d0a" opacity="0.85" transform="rotate(-25 89 177)"/>
+          <rect x="570" y="40" width="32" height="48" rx="16" fill="#7c3aed" opacity="0.85" transform="rotate(20 586 64)"/>
+          <rect x="583" y="83" width="9" height="20" rx="4" fill="#4c1d95" opacity="0.85" transform="rotate(20 587 93)"/>
+          <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0a1f14" stop-opacity="0.92"/><stop offset="55%" stop-color="#0a1f14" stop-opacity="0.75"/><stop offset="100%" stop-color="#0a1f14" stop-opacity="0"/></linearGradient></defs>
+          <rect width="680" height="200" fill="url(#hg)"/>
+          <text x="52" y="88" font-family="Georgia,serif" font-size="32" font-weight="700" fill="white">Play. Score. Win.</text>
+          <text x="54" y="118" font-family="Arial,sans-serif" font-size="13" fill="rgba(255,255,255,0.75)">Real-time scores · Live standings · Tournament history</text>
+        </svg>
       </div>
 
       <div class="card">

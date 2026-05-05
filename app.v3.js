@@ -213,6 +213,124 @@ function renderAuthUI(user) {
   }
 }
 
+// ── CourtIQ Rating System ────────────────────────────────────────────────────
+const DEFAULT_RATING = 1000;
+const K_FACTOR = 32; // How much ratings change per match
+
+function getRatingTier(rating) {
+  if (rating >= 1200) return { label: 'Elite', emoji: '🏆', color: '#854F0B' };
+  if (rating >= 1100) return { label: 'Advanced', emoji: '💎', color: '#185FA5' };
+  if (rating >= 1000) return { label: 'Intermediate', emoji: '⭐', color: '#085041' };
+  if (rating >= 900)  return { label: 'Developing', emoji: '🎯', color: '#633806' };
+  return { label: 'Beginner', emoji: '🌱', color: '#5a5a56' };
+}
+
+function expectedScore(ratingA, ratingB) {
+  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+function calcScoreMarginBonus(winScore, loseScore) {
+  // Bonus multiplier based on margin (11-3 is more convincing than 11-9)
+  const margin = winScore - loseScore;
+  if (margin >= 8) return 1.3;
+  if (margin >= 5) return 1.1;
+  return 1.0;
+}
+
+function calcNewRatings(ratingA, ratingB, scoreA, scoreB) {
+  const expA = expectedScore(ratingA, ratingB);
+  const expB = expectedScore(ratingB, ratingA);
+  const wonA = scoreA > scoreB ? 1 : 0;
+  const wonB = scoreB > scoreA ? 1 : 0;
+  const margin = calcScoreMarginBonus(
+    Math.max(scoreA, scoreB),
+    Math.min(scoreA, scoreB)
+  );
+  const newA = Math.round(ratingA + K_FACTOR * margin * (wonA - expA));
+  const newB = Math.round(ratingB + K_FACTOR * margin * (wonB - expB));
+  return { newA, newB };
+}
+
+async function updateRatingsAfterLeague(state) {
+  if (!currentUser) return;
+  try {
+    // Load all player ratings from Firestore
+    const ratingsSnap = await getDocs(collection(db, 'ratings'));
+    const ratings = {};
+    ratingsSnap.forEach(d => { ratings[d.id] = d.data(); });
+
+    // Process each completed match
+    const playerRatings = {}; // name -> current rating for this calculation
+
+    // Initialize ratings for all players in this league
+    state.players.forEach(name => {
+      const existing = Object.values(ratings).find(r => r.name === name);
+      playerRatings[name] = existing ? existing.rating : DEFAULT_RATING;
+    });
+
+    // Process matches in order
+    state.schedule.forEach(round => {
+      round.forEach(match => {
+        const res = state.results[match.id];
+        if (!res || !res.done) return;
+        const s1 = parseInt(res.s1), s2 = parseInt(res.s2);
+
+        let p1names = [], p2names = [];
+        if (match.type === 'fixed') {
+          const t1 = state.teams[match.t1], t2 = state.teams[match.t2];
+          p1names = t1?.players || [];
+          p2names = t2?.players || [];
+        } else {
+          p1names = (match.t1pair || []).map(i => state.players[i]);
+          p2names = (match.t2pair || []).map(i => state.players[i]);
+        }
+
+        // Calculate average team ratings
+        const avgR1 = p1names.reduce((s, n) => s + (playerRatings[n] || DEFAULT_RATING), 0) / (p1names.length || 1);
+        const avgR2 = p2names.reduce((s, n) => s + (playerRatings[n] || DEFAULT_RATING), 0) / (p2names.length || 1);
+
+        const { newA, newB } = calcNewRatings(avgR1, avgR2, s1, s2);
+        const deltaA = newA - avgR1;
+        const deltaB = newB - avgR2;
+
+        // Apply rating changes to each player
+        p1names.forEach(n => { if (playerRatings[n] !== undefined) playerRatings[n] = Math.round(playerRatings[n] + deltaA); });
+        p2names.forEach(n => { if (playerRatings[n] !== undefined) playerRatings[n] = Math.round(playerRatings[n] + deltaB); });
+      });
+    });
+
+    // Save updated ratings to Firestore
+    const batch = [];
+    for (const [name, rating] of Object.entries(playerRatings)) {
+      const existing = Object.values(ratings).find(r => r.name === name);
+      const docId = existing?.docId || name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+      batch.push(setDoc(doc(db, 'ratings', docId), {
+        name,
+        rating: Math.max(500, Math.min(2000, rating)), // clamp between 500-2000
+        docId,
+        lastUpdated: serverTimestamp(),
+        tier: getRatingTier(rating).label
+      }, { merge: true }));
+    }
+    await Promise.all(batch);
+    console.log('Ratings updated for', Object.keys(playerRatings).length, 'players');
+  } catch(e) {
+    console.error('Rating update error:', e);
+  }
+}
+
+async function loadPlayerRatings() {
+  try {
+    const snap = await getDocs(collection(db, 'ratings'));
+    const ratings = {};
+    snap.forEach(d => { ratings[d.data().name] = d.data(); });
+    return ratings;
+  } catch(e) {
+    console.error('Load ratings error:', e);
+    return {};
+  }
+}
+
 // ── Tab Navigation ────────────────────────────────────────────────────────────
 function gotoTab(t, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));

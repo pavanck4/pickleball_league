@@ -31,10 +31,13 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
-  background: var(--bg);
+  background: #f0ede6;
   color: var(--text-primary);
   min-height: 100vh;
   line-height: 1.5;
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(29,158,117,0.06) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(29,158,117,0.06) 0%, transparent 50%);
 }
 
 /* ── Hero Header ── */
@@ -45,6 +48,29 @@ body {
   top: 0;
   z-index: 10;
   box-shadow: 0 2px 20px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 50%, rgba(29,158,117,0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(29,158,117,0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Pickleball court lines in header */
+.header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
 }
 
 .header-inner {
@@ -775,3 +801,222 @@ input:focus {
 .page-title { margin-bottom: 1.25rem; }
 .page-title h2 { font-family: 'DM Serif Display', serif; font-size: 22px; font-weight: 400; margin-bottom: 3px; }
 .page-title p { font-size: 13px; color: var(--text-tertiary); }
+
+/* ── Plan Badge ── */
+.plan-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+.plan-badge.free {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  border: 0.5px solid rgba(255,255,255,0.2);
+}
+.plan-badge.pro {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.4);
+}
+
+/* ── Pickleball Visual Theme ── */
+
+/* Animated pickleball SVG background on login wall */
+.login-wall {
+  background: linear-gradient(160deg, #0a1f14 0%, #0d2d1e 40%, #1a3a25 70%, #0f2d1e 100%) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-wall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(29,158,117,0.2) 0%, transparent 40%),
+    radial-gradient(circle at 75% 75%, rgba(29,158,117,0.15) 0%, transparent 40%),
+    radial-gradient(circle at 75% 25%, rgba(255,255,255,0.03) 0%, transparent 30%);
+  pointer-events: none;
+}
+
+/* Court lines on login wall */
+.login-wall::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.login-card {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1) !important;
+}
+
+/* Colorful nav tabs */
+.nav-btn.active {
+  color: #fff !important;
+  border-bottom-color: #1D9E75 !important;
+  font-weight: 500;
+}
+
+/* Vibrant metric cards */
+.metric {
+  background: var(--bg-card) !important;
+  border: 0.5px solid var(--border);
+  border-top: 3px solid var(--green);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.metric:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Colorful rank badges */
+.r1 { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: #fff !important; box-shadow: 0 2px 8px rgba(245,158,11,0.4); }
+.r2 { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff !important; }
+.r3 { background: linear-gradient(135deg, #cd7c4a, #b45c2a) !important; color: #fff !important; }
+
+/* Vibrant match cards */
+.match-card {
+  border-left: 3px solid var(--green) !important;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.match-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* Colorful team boxes */
+.team-box {
+  background: linear-gradient(135deg, var(--bg-surface), #e8f4ef) !important;
+  border: 0.5px solid rgba(29,158,117,0.2) !important;
+}
+
+/* Win tag glow */
+.win-tag {
+  background: var(--green) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(29,158,117,0.3);
+}
+
+/* Pickleball ball decoration on cards */
+.history-card {
+  border-left: 3px solid var(--green) !important;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.history-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* Podium items colorful */
+.podium-item:nth-child(1) { background: linear-gradient(135deg, #fef3c7, #fde68a) !important; border-color: #f59e0b !important; }
+.podium-item:nth-child(2) { background: linear-gradient(135deg, #f1f5f9, #e2e8f0) !important; border-color: #94a3b8 !important; }
+.podium-item:nth-child(3) { background: linear-gradient(135deg, #fef2e8, #fde3cc) !important; border-color: #cd7c4a !important; }
+
+/* Score display */
+.score-num.score-win {
+  color: var(--green-dark) !important;
+  text-shadow: 0 0 20px rgba(29,158,117,0.3);
+}
+
+/* Colorful pills */
+.pill-done {
+  background: var(--green) !important;
+  color: #fff !important;
+}
+
+/* Share box more vibrant */
+.share-box {
+  background: linear-gradient(135deg, #e8f3fc, #d5eaf8) !important;
+  border: 1px solid #378ADD !important;
+}
+
+/* Storage banner */
+.storage-banner {
+  background: linear-gradient(135deg, #e8f8f2, #d5f2e8) !important;
+  border: 1px solid var(--green) !important;
+}
+
+/* Round tabs */
+.rtab.active {
+  background: linear-gradient(135deg, #1D9E75, #0F6E56) !important;
+  box-shadow: 0 3px 10px rgba(29,158,117,0.35) !important;
+}
+
+/* Card hover effects */
+.card {
+  transition: box-shadow 0.15s;
+}
+
+/* Mode card selected */
+.mode-card.selected {
+  background: linear-gradient(135deg, #f0fbf7, #e0f7ef) !important;
+  border-color: var(--green) !important;
+  border-width: 2px !important;
+}
+
+/* Profile hero */
+.profile-hero {
+  background: linear-gradient(135deg, #f0fbf7, #e8f8f2) !important;
+  border-left: 3px solid var(--green) !important;
+}
+
+/* Pickleball floating balls decoration */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(180deg); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(-180deg); }
+}
+
+.ball-decoration {
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+  animation: float 6s ease-in-out infinite;
+}
+
+.ball-decoration:nth-child(1) {
+  width: 120px; height: 120px;
+  background: var(--green);
+  top: 10%; right: 5%;
+  animation-delay: 0s;
+}
+
+.ball-decoration:nth-child(2) {
+  width: 80px; height: 80px;
+  background: var(--green);
+  top: 60%; left: 2%;
+  animation: floatSlow 8s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+.ball-decoration:nth-child(3) {
+  width: 60px; height: 60px;
+  background: #378ADD;
+  bottom: 15%; right: 8%;
+  animation: float 7s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+/* Container needs position relative for ball decorations */
+.app { position: relative; }

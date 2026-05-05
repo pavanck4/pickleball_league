@@ -12,13 +12,28 @@
 <!-- LOGIN WALL -->
 <div id="login-wall" class="login-wall">
   <div class="login-card">
-    <div class="login-logo">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-        <rect width="48" height="48" rx="14" fill="#1D9E75"/>
-        <circle cx="24" cy="24" r="14" stroke="white" stroke-width="2"/>
-        <path d="M12 24c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="white" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="24" cy="28" r="5" fill="white"/>
+    <div class="login-logo" style="position:relative;">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+        <rect width="56" height="56" rx="16" fill="#1D9E75"/>
+        <!-- Pickleball with holes pattern -->
+        <circle cx="28" cy="28" r="16" stroke="white" stroke-width="2.5" fill="none"/>
+        <circle cx="28" cy="28" r="10" stroke="rgba(255,255,255,0.4)" stroke-width="1" fill="none"/>
+        <!-- Holes on pickleball -->
+        <circle cx="22" cy="22" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="28" cy="20" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="34" cy="22" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="22" cy="28" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="28" cy="28" r="1.5" fill="white"/>
+        <circle cx="34" cy="28" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="22" cy="34" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="28" cy="36" r="1.5" fill="white" opacity="0.7"/>
+        <circle cx="34" cy="34" r="1.5" fill="white" opacity="0.7"/>
+        <!-- Paddle handle -->
+        <path d="M38 38 L46 46" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
       </svg>
+      <!-- Floating mini balls around logo -->
+      <div style="position:absolute;top:-8px;right:-8px;width:16px;height:16px;background:#1D9E75;border-radius:50%;border:2px solid rgba(255,255,255,0.3);opacity:0.8;"></div>
+      <div style="position:absolute;bottom:-4px;left:-8px;width:12px;height:12px;background:#378ADD;border-radius:50%;opacity:0.6;"></div>
     </div>
     <h1 class="login-title">CourtIQ</h1>
     <p class="login-subtitle">Sign in to manage your pickleball leagues, track scores and view your stats.</p>
@@ -31,8 +46,46 @@
   <div class="login-watermark">Powered by <strong>CourtIQ</strong> — by Pavan</div>
 </div>
 
+<!-- UPGRADE MODAL -->
+<div id="upgrade-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
+  <div style="background:#fff;border-radius:20px;padding:2rem;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:48px;margin-bottom:12px;">⭐</div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;margin-bottom:8px;">Upgrade to Pro</h2>
+    <p style="font-size:14px;color:#5a5a56;margin-bottom:1.5rem;line-height:1.6;">You've reached the <strong>8 player limit</strong> on the free plan. Upgrade to Pro for unlimited players and more!</p>
+
+    <div style="background:#f4f3ef;border-radius:12px;padding:1rem;margin-bottom:1.5rem;">
+      <div style="font-size:32px;font-weight:600;color:#1a1a18;font-family:'DM Serif Display',serif;">$3<span style="font-size:16px;font-weight:400;color:#5a5a56;">/month</span></div>
+      <div style="font-size:13px;color:#5a5a56;margin-top:4px;">Cancel anytime</div>
+    </div>
+
+    <div style="text-align:left;margin-bottom:1.5rem;">
+      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Unlimited players per league</div>
+      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Unlimited rounds</div>
+      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Full tournament history</div>
+      <div style="font-size:13px;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Player profiles & stats</div>
+      <div style="font-size:13px;color:#1a1a18;display:flex;align-items:center;gap:8px;"><span style="color:#1D9E75;">✓</span> Priority support</div>
+    </div>
+
+    <a href="https://buy.stripe.com/PLACEHOLDER" target="_blank"
+      style="display:block;width:100%;padding:13px;background:#1D9E75;color:#fff;border-radius:10px;font-size:15px;font-weight:500;text-decoration:none;margin-bottom:10px;font-family:'DM Sans',sans-serif;">
+      Upgrade to Pro — $3/month
+    </a>
+    <button onclick="hideUpgradeModal()"
+      style="width:100%;padding:10px;background:transparent;border:0.5px solid #ccc;border-radius:10px;font-size:14px;color:#5a5a56;cursor:pointer;font-family:'DM Sans',sans-serif;">
+      Maybe later
+    </button>
+    <p style="font-size:11px;color:#9a9a94;margin-top:12px;">After payment, your account upgrades automatically within a few minutes.</p>
+  </div>
+</div>
+
 <!-- MAIN APP -->
 <div id="main-app" style="display:none;">
+
+  <!-- Floating pickleball decorations -->
+  <div class="ball-decoration" style="background:radial-gradient(circle at 35% 35%, #fff 2px, transparent 2px), radial-gradient(circle at 65% 35%, #fff 2px, transparent 2px), radial-gradient(circle at 35% 65%, #fff 2px, transparent 2px), radial-gradient(circle at 65% 65%, #fff 2px, transparent 2px), #1D9E75;"></div>
+  <div class="ball-decoration"></div>
+  <div class="ball-decoration"></div>
+
   <div class="header">
     <div class="header-inner">
       <div class="brand">
@@ -50,6 +103,7 @@
       </div>
       <div class="header-right">
         <span class="sync-status" id="sync-status"></span>
+        <span class="plan-badge" id="plan-badge" style="display:none;">Free</span>
         <button class="btn-danger" id="reset-btn" onclick="confirmReset()" style="display:none;">Reset</button>
         <button class="auth-btn" id="auth-btn" onclick="loginWithGoogle()">Sign in</button>
       </div>
@@ -122,6 +176,9 @@
           <div>
             <label class="field-label">Number of players (even)</label>
             <input type="number" id="inp-n" min="4" max="20" step="2" value="6" oninput="refreshPlayerInputs()">
+            <div id="player-limit-hint" style="font-size:12px;color:#633806;margin-top:4px;display:none;">
+              Free plan: max 8 players. <span style="color:#1D9E75;cursor:pointer;text-decoration:underline;" onclick="showUpgradeModal()">Upgrade to Pro →</span>
+            </div>
           </div>
           <div>
             <label class="field-label">Number of rounds</label>

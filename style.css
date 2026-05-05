@@ -42,9 +42,7 @@ body {
 
 /* ── Hero Header ── */
 .header {
-  background:
-    linear-gradient(135deg, rgba(10,31,20,0.97) 0%, rgba(13,45,30,0.97) 50%, rgba(15,56,36,0.97) 100%),
-    url('https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=800&q=60') center/cover no-repeat;
+  background: linear-gradient(135deg, #0a1f14 0%, #0d2d1e 50%, #0f3824 100%);
   padding: 0;
   position: sticky;
   top: 0;
@@ -826,13 +824,11 @@ input:focus {
 
 /* ── Pickleball Visual Theme ── */
 
-/* Login wall with pickleball court image */
+/* Login wall with SVG court pattern */
 .login-wall {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(160deg, rgba(10,31,20,0.92) 0%, rgba(13,45,30,0.88) 50%, rgba(15,56,36,0.85) 100%),
-    url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80') center/cover no-repeat !important;
+  background: linear-gradient(160deg, #0a1f14 0%, #0d2d1e 40%, #1a3a25 70%, #0f2d1e 100%) !important;
 }
 
 .login-wall::before {
@@ -1025,9 +1021,7 @@ input:focus {
 
 /* ── Hero Banner ── */
 .hero-banner {
-  background:
-    linear-gradient(135deg, rgba(10,31,20,0.85) 0%, rgba(13,45,30,0.8) 100%),
-    url('https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=1200&q=80') center/cover no-repeat;
+  background: linear-gradient(135deg, #0a1f14 0%, #0d3520 50%, #0f4a2a 100%);
   border-radius: var(--radius-xl);
   margin-bottom: 1.5rem;
   overflow: hidden;
@@ -1122,4 +1116,23 @@ input:focus {
   .hero-sub { font-size: 12px; }
   .hero-ball.b2, .hero-ball.b3 { display: none; }
   .hero-ball.b1 { width: 44px; height: 44px; }
+}
+
+/* ── Hero Court SVG ── */
+.hero-court-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-banner {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
 }

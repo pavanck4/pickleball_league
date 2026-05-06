@@ -973,7 +973,6 @@ async function loadMyLeagues() {
   if (!wrap) return;
 
   try {
-    // Query leagues where user is creator or member
     const created = await getDocs(query(
       collection(db, 'leagues'),
       where('createdBy', '==', currentUser.uid),
@@ -988,18 +987,22 @@ async function loadMyLeagues() {
     }
 
     wrap.style.display = '';
-    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My leagues</div>'
-      + leagues.map(l => {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My recent leagues — tap to rejoin</div>'
+      + leagues.slice(0, 5).map(l => {
         const total = Object.keys(l.results || {}).length;
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
+        const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
         return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
-          + '<span style="font-weight:500;font-size:14px;">' + l.leagueCode + '</span>'
-          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? 'Complete' : 'Active') + '</span>'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
+          + '<span style="font-size:12px;color:var(--text-tertiary);">' + date + '</span>'
           + '</div>'
-          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:3px;">'
-          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches'
+          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? '✓ Complete' : '● Active') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'
+          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches played'
           + '</div></div>';
       }).join('');
   } catch(e) {
@@ -1377,13 +1380,7 @@ onAuthStateChanged(auth, async user => {
     await loadUserData();
     await loadGroupsFromFirebase();
     loadMyLeagues();
-    // Use per-user last code — prevents seeing other users' leagues
-    const lastCode = localStorage.getItem('pickleball_last_code_' + user.uid)
-                  || localStorage.getItem('pickleball_last_code');
-    if (lastCode) {
-      const joinCodeEl = document.getElementById('join-code');
-      if (joinCodeEl) joinCodeEl.value = lastCode;
-      await joinLeague(true);
-    }
+    // Do NOT auto-rejoin — user should explicitly join or create a league
+    // This prevents showing other users' leagues on shared devices
   }
 });

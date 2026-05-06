@@ -474,13 +474,34 @@ async function joinLeague(silent) {
       return;
     }
     const data = snap.data();
+
+    // Check if this user belongs to this league
+    if (silent && currentUser) {
+      const memberUids = data.memberUids || {};
+      const createdBy = data.createdBy;
+      const isMember = memberUids[currentUser.uid] || createdBy === currentUser.uid;
+      if (!isMember) {
+        // This is not the user's league — don't auto-rejoin
+        localStorage.removeItem('pickleball_last_code');
+  if (currentUser) localStorage.removeItem('pickleball_last_code_' + currentUser.uid);
+        return;
+      }
+    }
+
     S = fromFirestore(data);
     leagueCode = code;
     activeRound = 0;
-    localStorage.setItem('pickleball_last_code', code);
 
-    // Register this user as a member
+    // Store per-user league membership
     if (currentUser) {
+      const userLeaguesKey = 'courtiq_leagues_' + currentUser.uid;
+      const myLeagues = JSON.parse(localStorage.getItem(userLeaguesKey) || '[]');
+      if (!myLeagues.includes(code)) {
+        myLeagues.unshift(code);
+        localStorage.setItem(userLeaguesKey, JSON.stringify(myLeagues.slice(0, 20)));
+      }
+      localStorage.setItem('pickleball_last_code_' + currentUser.uid, code);
+      // Register membership in Firebase
       await setDoc(doc(db, 'leagues', code), {
         memberUids: { [currentUser.uid]: { name: currentUser.displayName, joinedAt: serverTimestamp() } }
       }, { merge: true });
@@ -945,6 +966,54 @@ function renderGroups() {
   ).join('');
 }
 
+// ── My Leagues ────────────────────────────────────────────────────────────────
+async function loadMyLeagues() {
+  if (!currentUser) return;
+  const wrap = document.getElementById('my-leagues-wrap');
+  if (!wrap) return;
+
+  try {
+    // Query leagues where user is creator or member
+    const created = await getDocs(query(
+      collection(db, 'leagues'),
+      where('createdBy', '==', currentUser.uid),
+      orderBy('updatedAt', 'desc')
+    ));
+    const leagues = [];
+    created.forEach(d => leagues.push(d.data()));
+
+    if (leagues.length === 0) {
+      wrap.style.display = 'none';
+      return;
+    }
+
+    wrap.style.display = '';
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My leagues</div>'
+      + leagues.map(l => {
+        const total = Object.keys(l.results || {}).length;
+        const done = Object.values(l.results || {}).filter(r => r.done).length;
+        const isComplete = l.isComplete;
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+          + '<span style="font-weight:500;font-size:14px;">' + l.leagueCode + '</span>'
+          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? 'Complete' : 'Active') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:3px;">'
+          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches'
+          + '</div></div>';
+      }).join('');
+  } catch(e) {
+    console.error('loadMyLeagues error:', e);
+    wrap.style.display = 'none';
+  }
+}
+
+async function quickJoin(code) {
+  const input = document.getElementById('join-code');
+  if (input) input.value = code;
+  await joinLeague(false);
+}
+
 // ── League Setup ──────────────────────────────────────────────────────────────
 function selectMode(m) {
   S.mode = m;
@@ -1056,6 +1125,15 @@ async function generateLeague() {
   leagueCode = generateCode();
   // Store start date in local timezone
   localStorage.setItem('league_start_' + leagueCode, new Date().toISOString());
+  // Store per-user league code
+  if (currentUser) {
+    localStorage.setItem('pickleball_last_code_' + currentUser.uid, leagueCode);
+    const userLeaguesKey = 'courtiq_leagues_' + currentUser.uid;
+    const myLeagues = JSON.parse(localStorage.getItem(userLeaguesKey) || '[]');
+    if (!myLeagues.includes(leagueCode)) myLeagues.unshift(leagueCode);
+    localStorage.setItem(userLeaguesKey, JSON.stringify(myLeagues.slice(0, 20)));
+  }
+  localStorage.setItem('pickleball_last_code', leagueCode);
   showLeagueUI();
   await saveToFirebase();
   subscribeToLeague(leagueCode);
@@ -1273,6 +1351,8 @@ window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
+window.quickJoin = quickJoin;
+window.loadMyLeagues = loadMyLeagues;
 window.showUpgradeModal = showUpgradeModal;
 window.hideUpgradeModal = hideUpgradeModal;
 window.logout = logout;
@@ -1296,9 +1376,13 @@ onAuthStateChanged(auth, async user => {
     clearPlayerInputs();
     await loadUserData();
     await loadGroupsFromFirebase();
-    const lastCode = localStorage.getItem('pickleball_last_code');
+    loadMyLeagues();
+    // Use per-user last code — prevents seeing other users' leagues
+    const lastCode = localStorage.getItem('pickleball_last_code_' + user.uid)
+                  || localStorage.getItem('pickleball_last_code');
     if (lastCode) {
-      document.getElementById('join-code').value = lastCode;
+      const joinCodeEl = document.getElementById('join-code');
+      if (joinCodeEl) joinCodeEl.value = lastCode;
       await joinLeague(true);
     }
   }

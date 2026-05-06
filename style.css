@@ -1148,3 +1148,19 @@ input:focus {
 }
 
 .hero-text { max-width: 260px; }
+
+/* ── My Leagues ── */
+.my-league-chip {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-left: 3px solid var(--green);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.my-league-chip:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}

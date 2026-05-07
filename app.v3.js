@@ -678,8 +678,7 @@ async function renderUsers() {
           + '<span class="pill ' + (isOnline?'pill-done':'pill-pend') + '" style="font-size:11px;">' + (isOnline?'● Online':'Offline') + '</span>'
           + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px;">' + (u.createdAt?'Joined '+formatDate(u.createdAt):'Just joined') + '</div>'
           + '</div></div>';
-    });
-    chipsArr.forEach(function(c){ wrap.appendChild(c); });
+      }).join('');
       cont.innerHTML = '<div class="grid4" style="margin-bottom:1.25rem;">'
         + '<div class="metric"><div class="metric-val">' + users.length + '</div><div class="metric-lbl">Enrolled</div></div>'
         + '<div class="metric"><div class="metric-val" style="color:#1D9E75;">' + onlineCount + '</div><div class="metric-lbl">Online now</div></div>'
@@ -883,175 +882,49 @@ function renderMySchedule() {
     </div>`;
 }
 
-// ── Firebase: Private Groups ─────────────────────────────────────────────────
+// ── Firebase: Groups ──────────────────────────────────────────────────────────
 async function loadGroupsFromFirebase() {
-  if (!currentUser) return;
-  const localKey = 'courtiq_groups_' + currentUser.uid;
   try {
-    const local = JSON.parse(localStorage.getItem(localKey) || '[]');
+    const local = JSON.parse(localStorage.getItem('courtiq_groups') || '[]');
     if (Array.isArray(local) && local.length) { cachedGroups = local; renderGroups(); }
   } catch (e) {}
   try {
-    // Load only this user's private groups
-    const snap = await getDoc(doc(db, 'groups', currentUser.uid));
+    const snap = await getDoc(doc(db, 'groups', 'shared'));
     if (snap.exists() && Array.isArray(snap.data().list)) {
       cachedGroups = snap.data().list;
-      localStorage.setItem(localKey, JSON.stringify(cachedGroups));
-    } else {
-      cachedGroups = [];
+      localStorage.setItem('courtiq_groups', JSON.stringify(cachedGroups));
     }
   } catch (e) { console.error('Groups load error:', e); }
   renderGroups();
 }
 
 async function saveGroups(groups) {
-  if (!currentUser) return false;
   cachedGroups = groups;
-  const localKey = 'courtiq_groups_' + currentUser.uid;
-  localStorage.setItem(localKey, JSON.stringify(groups));
+  localStorage.setItem('courtiq_groups', JSON.stringify(groups));
   try {
-    // Save to owner's groups document
-    await setDoc(doc(db, 'groups', currentUser.uid), {
-      list: groups,
-      ownerUid: currentUser.uid,
-      ownerEmail: currentUser.email,
-      updatedAt: serverTimestamp()
-    });
-
-    // Also push shared groups to each member's document
-    for (const group of groups) {
-      if (!group.memberUids) continue;
-      for (const uid of group.memberUids) {
-        if (uid === currentUser.uid) continue;
-        try {
-          const memberDoc = await getDoc(doc(db, 'groups', uid));
-          const memberGroups = memberDoc.exists() ? (memberDoc.data().list || []) : [];
-          // Remove old version of this group and add updated
-          const filtered = memberGroups.filter(g => !(g.name === group.name && g.ownerUid === currentUser.uid));
-          filtered.unshift(group);
-          await setDoc(doc(db, 'groups', uid), {
-            list: filtered.slice(0, 20),
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        } catch(e) {
-          console.error('Error sharing group with member:', uid, e);
-        }
-      }
-    }
+    await setDoc(doc(db, 'groups', 'shared'), { list: groups, updatedAt: serverTimestamp() });
     return true;
   } catch (e) { console.error('Groups save error:', e); return false; }
 }
 
-function showCreateGroupModal(editIdx) {
-  if (!currentUser) { showToast('Sign in to create groups', 'error'); return; }
-  const modal = document.getElementById('group-modal');
-  const nameInput = document.getElementById('group-modal-name');
-  const emailsInput = document.getElementById('group-modal-emails');
-  const title = document.getElementById('group-modal-title');
-  if (!modal) return;
-
-  if (editIdx !== undefined && cachedGroups[editIdx]) {
-    const g = cachedGroups[editIdx];
-    nameInput.value = g.name || '';
-    emailsInput.value = (g.memberEmails || []).join(', ');
-    title.textContent = 'Edit group';
-  } else {
-    nameInput.value = '';
-    emailsInput.value = currentUser.email;
-    title.textContent = 'Create a group';
-  }
-
-  modal.style.display = 'flex';
-  modal.dataset.editIdx = editIdx !== undefined ? editIdx : '';
-  setTimeout(() => nameInput.focus(), 100);
-}
-
-function hideGroupModal() {
-  const modal = document.getElementById('group-modal');
-  if (modal) modal.style.display = 'none';
-}
-
 async function saveCurrentAsGroup(editIdx) {
-  showCreateGroupModal(editIdx);
-}
-
-async function confirmSaveGroup() {
-  const modal = document.getElementById('group-modal');
-  const nameVal = document.getElementById('group-modal-name').value.trim();
-  const emailsVal = document.getElementById('group-modal-emails').value.trim();
-  const editIdx = modal.dataset.editIdx !== '' ? parseInt(modal.dataset.editIdx) : undefined;
-
-  if (!nameVal) { showToast('Enter a group name', 'error'); return; }
-
-  // Parse and validate emails
-  const emails = emailsVal.split(',').join('\n').split('\n').map(function(e) { return e.trim().toLowerCase(); }).filter(function(e) { return e.length > 0; });
-  if (emails.length === 0) { showToast('Add at least one email address', 'error'); return; }
-
-  // Validate email format
-  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-  const invalid = emails.filter(e => !emailRegex.test(e));
-  if (invalid.length > 0) { showToast('Invalid email: ' + invalid[0], 'error'); return; }
-
-  // Make sure owner's email is always included
-  if (!emails.includes(currentUser.email.toLowerCase())) {
-    emails.unshift(currentUser.email.toLowerCase());
+  const n = parseInt(document.getElementById('inp-n').value) || 6;
+  const players = [];
+  for (let i = 0; i < n; i++) {
+    const v = (document.getElementById('pi' + i)?.value || '').trim();
+    if (v) players.push(v);
   }
-
-  // Look up registered users by email to get their UIDs
-  showToast('Saving group…', 'link');
-  hideGroupModal();
-
-  const memberUids = [currentUser.uid];
-  const registeredEmails = [currentUser.email.toLowerCase()];
-  const unregisteredEmails = [];
-
-  // Check each email against users collection
-  try {
-    const usersSnap = await getDocs(collection(db, 'users'));
-    const allUsers = {};
-    usersSnap.forEach(d => {
-      const u = d.data();
-      if (u.email) allUsers[u.email.toLowerCase()] = u;
-    });
-
-    emails.forEach(email => {
-      if (email === currentUser.email.toLowerCase()) return;
-      if (allUsers[email]) {
-        memberUids.push(allUsers[email].uid);
-        registeredEmails.push(email);
-      } else {
-        unregisteredEmails.push(email);
-      }
-    });
-  } catch(e) {
-    console.error('Error looking up users:', e);
-  }
-
+  if (players.length < 4) { showToast('Enter at least 4 player names first', 'error'); return; }
+  const def = editIdx !== undefined ? cachedGroups[editIdx]?.name || '' : '';
+  const name = prompt(editIdx !== undefined ? 'Rename group:' : 'Name this group:', def);
+  if (!name?.trim()) return;
   const groups = [...cachedGroups];
-  const entry = {
-    name: nameVal,
-    players: registeredEmails.map(e => {
-      // Use display name if available
-      return e;
-    }),
-    memberEmails: registeredEmails,
-    memberUids,
-    ownerUid: currentUser.uid,
-    ownerEmail: currentUser.email.toLowerCase(),
-    savedAt: new Date().toISOString()
-  };
-
+  const entry = { name: name.trim(), players, savedAt: new Date().toISOString() };
   if (editIdx !== undefined) groups[editIdx] = entry;
   else groups.unshift(entry);
-
   const ok = await saveGroups(groups.slice(0, 10));
   renderGroups();
-
-  if (unregisteredEmails.length > 0) {
-    showToast('Group saved! Note: ' + unregisteredEmails.join(', ') + ' not registered yet', 'error');
-  } else {
-    showToast('✓ Group saved & shared with ' + registeredEmails.length + ' members!');
-  }
+  showToast(ok ? '✓ Group saved & synced!' : 'Saved locally only', ok ? 'success' : 'error');
 }
 
 function loadGroup(idx) {
@@ -1080,8 +953,7 @@ function renderGroups() {
   if (!wrap || !chips) return;
   if (!cachedGroups.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  chips.innerHTML = '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">🔒 Private — only visible to you</div>'
-  + cachedGroups.map((g, i) =>
+  chips.innerHTML = cachedGroups.map((g, i) =>
     '<div class="group-chip">'
     + '<button class="group-chip-load" onclick="loadGroup(' + i + ')">'
     + '<span class="group-chip-name">' + g.name + '</span>'
@@ -1115,39 +987,24 @@ async function loadMyLeagues() {
     }
 
     wrap.style.display = '';
-    wrap.innerHTML = '';
-    var label = document.createElement('div');
-    label.style.cssText = 'font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
-    label.textContent = 'My recent leagues — tap to rejoin';
-    wrap.appendChild(label);
-    var chipsArr = [];
-    leagues.slice(0, 5).forEach(function(l) {
-      var total = Object.keys(l.results || {}).length;
-      var done = Object.values(l.results || {}).filter(function(r){ return r.done; }).length;
-      var isComplete = l.isComplete;
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My recent leagues — tap to rejoin</div>'
+      + leagues.slice(0, 5).map(l => {
         const total = Object.keys(l.results || {}).length;
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
         const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        var chip = document.createElement('div');
-        chip.className = 'my-league-chip';
-        chip.dataset.code = l.leagueCode;
-        var r1 = document.createElement('div');
-        r1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;';
-        var codeEl = document.createElement('span');
-        codeEl.style.cssText = 'font-weight:600;font-size:14px;letter-spacing:1px;';
-        codeEl.textContent = l.leagueCode;
-        var pillEl = document.createElement('span');
-        pillEl.className = 'pill ' + (isComplete ? 'pill-done' : 'pill-pend');
-        pillEl.style.fontSize = '11px';
-        pillEl.textContent = isComplete ? 'Complete' : 'Active';
-        r1.appendChild(codeEl); r1.appendChild(pillEl);
-        var r2 = document.createElement('div');
-        r2.style.cssText = 'font-size:12px;color:var(--text-secondary);';
-        r2.textContent = (l.players||[]).length + ' players · ' + done + '/' + total + ' played';
-        chip.appendChild(r1); chip.appendChild(r2);
-        chip.addEventListener('click', function(){ quickJoin(this.dataset.code); });
-        chipsArr.push(chip);
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
+          + '<span style="font-size:12px;color:var(--text-tertiary);">' + date + '</span>'
+          + '</div>'
+          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? '✓ Complete' : '● Active') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'
+          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches played'
+          + '</div></div>';
+      }).join('');
   } catch(e) {
     console.error('loadMyLeagues error:', e);
     wrap.style.display = 'none';
@@ -1492,15 +1349,11 @@ window.confirmReset = confirmReset;
 window.copyCode = copyCode;
 window.forceSaveHistory = forceSaveHistory;
 window.saveCurrentAsGroup = saveCurrentAsGroup;
-window.showCreateGroupModal = showCreateGroupModal;
 window.loadGroup = loadGroup;
 window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
-window.showCreateGroupModal = showCreateGroupModal;
-window.hideGroupModal = hideGroupModal;
-window.confirmSaveGroup = confirmSaveGroup;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
 window.showUpgradeModal = showUpgradeModal;

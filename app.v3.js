@@ -988,7 +988,7 @@ async function confirmSaveGroup() {
   if (emails.length === 0) { showToast('Add at least one email address', 'error'); return; }
 
   // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
   const invalid = emails.filter(e => !emailRegex.test(e));
   if (invalid.length > 0) { showToast('Invalid email: ' + invalid[0], 'error'); return; }
 

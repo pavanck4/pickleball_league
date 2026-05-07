@@ -909,42 +909,149 @@ async function saveGroups(groups) {
   const localKey = 'courtiq_groups_' + currentUser.uid;
   localStorage.setItem(localKey, JSON.stringify(groups));
   try {
-    // Save to user's private groups document
+    // Save to owner's groups document
     await setDoc(doc(db, 'groups', currentUser.uid), {
       list: groups,
       ownerUid: currentUser.uid,
       ownerEmail: currentUser.email,
       updatedAt: serverTimestamp()
     });
+
+    // Also push shared groups to each member's document
+    for (const group of groups) {
+      if (!group.memberUids) continue;
+      for (const uid of group.memberUids) {
+        if (uid === currentUser.uid) continue;
+        try {
+          const memberDoc = await getDoc(doc(db, 'groups', uid));
+          const memberGroups = memberDoc.exists() ? (memberDoc.data().list || []) : [];
+          // Remove old version of this group and add updated
+          const filtered = memberGroups.filter(g => !(g.name === group.name && g.ownerUid === currentUser.uid));
+          filtered.unshift(group);
+          await setDoc(doc(db, 'groups', uid), {
+            list: filtered.slice(0, 20),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch(e) {
+          console.error('Error sharing group with member:', uid, e);
+        }
+      }
+    }
     return true;
   } catch (e) { console.error('Groups save error:', e); return false; }
 }
 
-async function saveCurrentAsGroup(editIdx) {
-  if (!currentUser) { showToast('Sign in to save groups', 'error'); return; }
-  const n = parseInt(document.getElementById('inp-n').value) || 6;
-  const players = [];
-  for (let i = 0; i < n; i++) {
-    const v = (document.getElementById('pi' + i)?.value || '').trim();
-    if (v) players.push(v);
+function showCreateGroupModal(editIdx) {
+  if (!currentUser) { showToast('Sign in to create groups', 'error'); return; }
+  const modal = document.getElementById('group-modal');
+  const nameInput = document.getElementById('group-modal-name');
+  const emailsInput = document.getElementById('group-modal-emails');
+  const title = document.getElementById('group-modal-title');
+  if (!modal) return;
+
+  if (editIdx !== undefined && cachedGroups[editIdx]) {
+    const g = cachedGroups[editIdx];
+    nameInput.value = g.name || '';
+    emailsInput.value = (g.memberEmails || []).join(', ');
+    title.textContent = 'Edit group';
+  } else {
+    nameInput.value = '';
+    emailsInput.value = currentUser.email;
+    title.textContent = 'Create a group';
   }
-  if (players.length < 4) { showToast('Enter at least 4 player names first', 'error'); return; }
-  const def = editIdx !== undefined ? cachedGroups[editIdx]?.name || '' : '';
-  const name = prompt(editIdx !== undefined ? 'Rename group:' : 'Name this group:', def);
-  if (!name?.trim()) return;
+
+  modal.style.display = 'flex';
+  modal.dataset.editIdx = editIdx !== undefined ? editIdx : '';
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+function hideGroupModal() {
+  const modal = document.getElementById('group-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveCurrentAsGroup(editIdx) {
+  showCreateGroupModal(editIdx);
+}
+
+async function confirmSaveGroup() {
+  const modal = document.getElementById('group-modal');
+  const nameVal = document.getElementById('group-modal-name').value.trim();
+  const emailsVal = document.getElementById('group-modal-emails').value.trim();
+  const editIdx = modal.dataset.editIdx !== '' ? parseInt(modal.dataset.editIdx) : undefined;
+
+  if (!nameVal) { showToast('Enter a group name', 'error'); return; }
+
+  // Parse and validate emails
+  const emails = emailsVal.split(/[,
+]+/).map(e => e.trim().toLowerCase()).filter(e => e.length > 0);
+  if (emails.length === 0) { showToast('Add at least one email address', 'error'); return; }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const invalid = emails.filter(e => !emailRegex.test(e));
+  if (invalid.length > 0) { showToast('Invalid email: ' + invalid[0], 'error'); return; }
+
+  // Make sure owner's email is always included
+  if (!emails.includes(currentUser.email.toLowerCase())) {
+    emails.unshift(currentUser.email.toLowerCase());
+  }
+
+  // Look up registered users by email to get their UIDs
+  showToast('Saving group…', 'link');
+  hideGroupModal();
+
+  const memberUids = [currentUser.uid];
+  const registeredEmails = [currentUser.email.toLowerCase()];
+  const unregisteredEmails = [];
+
+  // Check each email against users collection
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const allUsers = {};
+    usersSnap.forEach(d => {
+      const u = d.data();
+      if (u.email) allUsers[u.email.toLowerCase()] = u;
+    });
+
+    emails.forEach(email => {
+      if (email === currentUser.email.toLowerCase()) return;
+      if (allUsers[email]) {
+        memberUids.push(allUsers[email].uid);
+        registeredEmails.push(email);
+      } else {
+        unregisteredEmails.push(email);
+      }
+    });
+  } catch(e) {
+    console.error('Error looking up users:', e);
+  }
+
   const groups = [...cachedGroups];
   const entry = {
-    name: name.trim(),
-    players,
-    savedAt: new Date().toISOString(),
+    name: nameVal,
+    players: registeredEmails.map(e => {
+      // Use display name if available
+      return e;
+    }),
+    memberEmails: registeredEmails,
+    memberUids,
     ownerUid: currentUser.uid,
-    ownerEmail: currentUser.email
+    ownerEmail: currentUser.email.toLowerCase(),
+    savedAt: new Date().toISOString()
   };
+
   if (editIdx !== undefined) groups[editIdx] = entry;
   else groups.unshift(entry);
+
   const ok = await saveGroups(groups.slice(0, 10));
   renderGroups();
-  showToast(ok ? '✓ Group saved privately!' : 'Saved locally only', ok ? 'success' : 'error');
+
+  if (unregisteredEmails.length > 0) {
+    showToast('Group saved! Note: ' + unregisteredEmails.join(', ') + ' not registered yet', 'error');
+  } else {
+    showToast('✓ Group saved & shared with ' + registeredEmails.length + ' members!');
+  }
 }
 
 function loadGroup(idx) {
@@ -1008,23 +1115,24 @@ async function loadMyLeagues() {
     }
 
     wrap.style.display = '';
-    var chipsHtml = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My recent leagues</div>';
-    leagues.slice(0, 5).forEach(function(l) {
-      var total = Object.keys(l.results || {}).length;
-      var done = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
-      var isComplete = l.isComplete;
-      var chip = document.createElement('div');
-      chip.className = 'my-league-chip';
-      chip.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
-        + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
-        + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? 'Complete' : 'Active') + '</span>'
-        + '</div>'
-        + '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'
-        + (l.players || []).length + ' players · ' + done + '/' + total + ' played</div>';
-      chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
-      wrap.appendChild(chip);
-    });
-    return;
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My recent leagues — tap to rejoin</div>'
+      + leagues.slice(0, 5).map(l => {
+        const total = Object.keys(l.results || {}).length;
+        const done = Object.values(l.results || {}).filter(r => r.done).length;
+        const isComplete = l.isComplete;
+        const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
+          + '<span style="font-size:12px;color:var(--text-tertiary);">' + date + '</span>'
+          + '</div>'
+          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? '✓ Complete' : '● Active') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'
+          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches played'
+          + '</div></div>';
+      }).join('');
   } catch(e) {
     console.error('loadMyLeagues error:', e);
     wrap.style.display = 'none';
@@ -1369,11 +1477,15 @@ window.confirmReset = confirmReset;
 window.copyCode = copyCode;
 window.forceSaveHistory = forceSaveHistory;
 window.saveCurrentAsGroup = saveCurrentAsGroup;
+window.showCreateGroupModal = showCreateGroupModal;
 window.loadGroup = loadGroup;
 window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
+window.showCreateGroupModal = showCreateGroupModal;
+window.hideGroupModal = hideGroupModal;
+window.confirmSaveGroup = confirmSaveGroup;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
 window.showUpgradeModal = showUpgradeModal;

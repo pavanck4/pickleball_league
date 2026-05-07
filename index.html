@@ -230,7 +230,7 @@
         </div>
         <div id="player-inputs"></div>
         <div style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border);">
-          <button class="btn-save-group" onclick="saveCurrentAsGroup()">＋ Save these players as a group</button>
+          <button class="btn-save-group" onclick="showCreateGroupModal()">＋ Save as group (share with teammates)</button>
           <span style="font-size:12px;color:var(--text-tertiary);margin-left:8px;">so you don't have to retype next time</span>
         </div>
       </div>
@@ -288,6 +288,34 @@
       </svg>
     </div>
     <span>Powered by <strong>CourtIQ</strong> — by Pavan</span>
+  </div>
+</div>
+
+<!-- GROUP MODAL -->
+<div id="group-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
+  <div style="background:#fff;border-radius:20px;padding:2rem;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <h2 id="group-modal-title" style="font-family:'DM Serif Display',serif;font-size:20px;margin-bottom:6px;">Create a group</h2>
+    <p style="font-size:13px;color:#5a5a56;margin-bottom:1.25rem;">Groups are shared with registered CourtIQ users by email. League player names can still be any text.</p>
+
+    <label style="font-size:12px;font-weight:500;color:#5a5a56;display:block;margin-bottom:4px;">GROUP NAME</label>
+    <input type="text" id="group-modal-name" placeholder="e.g. VIP Players, Tuesday Gang"
+      style="width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:1rem;box-sizing:border-box;">
+
+    <label style="font-size:12px;font-weight:500;color:#5a5a56;display:block;margin-bottom:4px;">MEMBER EMAILS <span style="color:#9a9a94;font-weight:400;">(registered CourtIQ users only)</span></label>
+    <textarea id="group-modal-emails" placeholder="pavanck4@gmail.com&#10;friend@gmail.com&#10;wife@gmail.com"
+      style="width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;font-family:inherit;height:100px;resize:none;margin-bottom:6px;box-sizing:border-box;"></textarea>
+    <p style="font-size:12px;color:#9a9a94;margin-bottom:1.25rem;">One email per line or comma separated. Only users who have signed into CourtIQ will see this group.</p>
+
+    <div style="display:flex;gap:8px;">
+      <button onclick="confirmSaveGroup()"
+        style="flex:1;padding:12px;background:#1D9E75;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;">
+        Save group
+      </button>
+      <button onclick="hideGroupModal()"
+        style="padding:12px 20px;background:transparent;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;color:#5a5a56;cursor:pointer;font-family:inherit;">
+        Cancel
+      </button>
+    </div>
   </div>
 </div>
 

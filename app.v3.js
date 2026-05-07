@@ -882,32 +882,46 @@ function renderMySchedule() {
     </div>`;
 }
 
-// ── Firebase: Groups ──────────────────────────────────────────────────────────
+// ── Firebase: Private Groups ─────────────────────────────────────────────────
 async function loadGroupsFromFirebase() {
+  if (!currentUser) return;
+  const localKey = 'courtiq_groups_' + currentUser.uid;
   try {
-    const local = JSON.parse(localStorage.getItem('courtiq_groups') || '[]');
+    const local = JSON.parse(localStorage.getItem(localKey) || '[]');
     if (Array.isArray(local) && local.length) { cachedGroups = local; renderGroups(); }
   } catch (e) {}
   try {
-    const snap = await getDoc(doc(db, 'groups', 'shared'));
+    // Load only this user's private groups
+    const snap = await getDoc(doc(db, 'groups', currentUser.uid));
     if (snap.exists() && Array.isArray(snap.data().list)) {
       cachedGroups = snap.data().list;
-      localStorage.setItem('courtiq_groups', JSON.stringify(cachedGroups));
+      localStorage.setItem(localKey, JSON.stringify(cachedGroups));
+    } else {
+      cachedGroups = [];
     }
   } catch (e) { console.error('Groups load error:', e); }
   renderGroups();
 }
 
 async function saveGroups(groups) {
+  if (!currentUser) return false;
   cachedGroups = groups;
-  localStorage.setItem('courtiq_groups', JSON.stringify(groups));
+  const localKey = 'courtiq_groups_' + currentUser.uid;
+  localStorage.setItem(localKey, JSON.stringify(groups));
   try {
-    await setDoc(doc(db, 'groups', 'shared'), { list: groups, updatedAt: serverTimestamp() });
+    // Save to user's private groups document
+    await setDoc(doc(db, 'groups', currentUser.uid), {
+      list: groups,
+      ownerUid: currentUser.uid,
+      ownerEmail: currentUser.email,
+      updatedAt: serverTimestamp()
+    });
     return true;
   } catch (e) { console.error('Groups save error:', e); return false; }
 }
 
 async function saveCurrentAsGroup(editIdx) {
+  if (!currentUser) { showToast('Sign in to save groups', 'error'); return; }
   const n = parseInt(document.getElementById('inp-n').value) || 6;
   const players = [];
   for (let i = 0; i < n; i++) {
@@ -919,12 +933,18 @@ async function saveCurrentAsGroup(editIdx) {
   const name = prompt(editIdx !== undefined ? 'Rename group:' : 'Name this group:', def);
   if (!name?.trim()) return;
   const groups = [...cachedGroups];
-  const entry = { name: name.trim(), players, savedAt: new Date().toISOString() };
+  const entry = {
+    name: name.trim(),
+    players,
+    savedAt: new Date().toISOString(),
+    ownerUid: currentUser.uid,
+    ownerEmail: currentUser.email
+  };
   if (editIdx !== undefined) groups[editIdx] = entry;
   else groups.unshift(entry);
   const ok = await saveGroups(groups.slice(0, 10));
   renderGroups();
-  showToast(ok ? '✓ Group saved & synced!' : 'Saved locally only', ok ? 'success' : 'error');
+  showToast(ok ? '✓ Group saved privately!' : 'Saved locally only', ok ? 'success' : 'error');
 }
 
 function loadGroup(idx) {
@@ -953,7 +973,8 @@ function renderGroups() {
   if (!wrap || !chips) return;
   if (!cachedGroups.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  chips.innerHTML = cachedGroups.map((g, i) =>
+  chips.innerHTML = '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">🔒 Private — only visible to you</div>'
+  + cachedGroups.map((g, i) =>
     '<div class="group-chip">'
     + '<button class="group-chip-load" onclick="loadGroup(' + i + ')">'
     + '<span class="group-chip-name">' + g.name + '</span>'
@@ -993,7 +1014,7 @@ async function loadMyLeagues() {
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
         const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        return '<div class="my-league-chip" onclick="quickJoin(\'' + l.leagueCode + '\')">'
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;">'
           + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'

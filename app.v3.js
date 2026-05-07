@@ -678,7 +678,8 @@ async function renderUsers() {
           + '<span class="pill ' + (isOnline?'pill-done':'pill-pend') + '" style="font-size:11px;">' + (isOnline?'● Online':'Offline') + '</span>'
           + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:3px;">' + (u.createdAt?'Joined '+formatDate(u.createdAt):'Just joined') + '</div>'
           + '</div></div>';
-      }).join('');
+    });
+    chipsArr.forEach(function(c){ wrap.appendChild(c); });
       cont.innerHTML = '<div class="grid4" style="margin-bottom:1.25rem;">'
         + '<div class="metric"><div class="metric-val">' + users.length + '</div><div class="metric-lbl">Enrolled</div></div>'
         + '<div class="metric"><div class="metric-val" style="color:#1D9E75;">' + onlineCount + '</div><div class="metric-lbl">Online now</div></div>'
@@ -1114,24 +1115,39 @@ async function loadMyLeagues() {
     }
 
     wrap.style.display = '';
-    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My recent leagues — tap to rejoin</div>'
-      + leagues.slice(0, 5).map(l => {
+    wrap.innerHTML = '';
+    var label = document.createElement('div');
+    label.style.cssText = 'font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
+    label.textContent = 'My recent leagues — tap to rejoin';
+    wrap.appendChild(label);
+    var chipsArr = [];
+    leagues.slice(0, 5).forEach(function(l) {
+      var total = Object.keys(l.results || {}).length;
+      var done = Object.values(l.results || {}).filter(function(r){ return r.done; }).length;
+      var isComplete = l.isComplete;
         const total = Object.keys(l.results || {}).length;
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
         const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        return '<div class="my-league-chip" onclick="quickJoin('" + l.leagueCode + "')">'
-          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
-          + '<div style="display:flex;align-items:center;gap:8px;">'
-          + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
-          + '<span style="font-size:12px;color:var(--text-tertiary);">' + date + '</span>'
-          + '</div>'
-          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? '✓ Complete' : '● Active') + '</span>'
-          + '</div>'
-          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'
-          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches played'
-          + '</div></div>';
-      }).join('');
+        var chip = document.createElement('div');
+        chip.className = 'my-league-chip';
+        chip.dataset.code = l.leagueCode;
+        var r1 = document.createElement('div');
+        r1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;';
+        var codeEl = document.createElement('span');
+        codeEl.style.cssText = 'font-weight:600;font-size:14px;letter-spacing:1px;';
+        codeEl.textContent = l.leagueCode;
+        var pillEl = document.createElement('span');
+        pillEl.className = 'pill ' + (isComplete ? 'pill-done' : 'pill-pend');
+        pillEl.style.fontSize = '11px';
+        pillEl.textContent = isComplete ? 'Complete' : 'Active';
+        r1.appendChild(codeEl); r1.appendChild(pillEl);
+        var r2 = document.createElement('div');
+        r2.style.cssText = 'font-size:12px;color:var(--text-secondary);';
+        r2.textContent = (l.players||[]).length + ' players · ' + done + '/' + total + ' played';
+        chip.appendChild(r1); chip.appendChild(r2);
+        chip.addEventListener('click', function(){ quickJoin(this.dataset.code); });
+        chipsArr.push(chip);
   } catch(e) {
     console.error('loadMyLeagues error:', e);
     wrap.style.display = 'none';

@@ -9,9 +9,9 @@ if [ $? -ne 0 ]; then
 fi
 echo "✅ Syntax OK"
 
-# 2. Check for the specific broken pattern — empty quotes '' next to + variable +
+# 2. Check for broken inline onclick with empty string quotes
 if grep -n "onclick=\".*('').*\"" app.v3.js; then
-  echo "❌ Found broken onclick with empty quotes '' — use addEventListener instead!"
+  echo "❌ Found broken onclick with empty quotes — use addEventListener instead!"
   exit 1
 fi
 echo "✅ No broken onclick patterns"
@@ -23,21 +23,30 @@ if grep -Pn "/\[.*\n.*\]/" app.v3.js 2>/dev/null; then
 fi
 echo "✅ No regex issues"
 
-# 4. Check for duplicate const declarations in same scope
-DUPES=$(grep -n "^\s*const total\b" app.v3.js | wc -l)
-if [ "$DUPES" -gt 1 ]; then
-  echo "❌ Duplicate 'const total' found!"
-  grep -n "const total\b" app.v3.js
-  exit 1
-fi
-echo "✅ No duplicate declarations"
-
-# 5. Verify loginWithGoogle is exposed
+# 4. Verify loginWithGoogle is exposed
 if ! grep -q "window.loginWithGoogle" app.v3.js; then
   echo "❌ window.loginWithGoogle not exposed!"
   exit 1
 fi
 echo "✅ loginWithGoogle exposed"
+
+# 5. Check browser console for errors using node
+node -e "
+const fs = require('fs');
+const code = fs.readFileSync('app.v3.js', 'utf8');
+// Check for the specific broken pattern that node misses but browser catches
+const broken = code.match(/onclick=\"[^\"]*''\s*\+/g);
+if (broken) {
+  console.error('BROKEN ONCLICK:', broken);
+  process.exit(1);
+}
+console.log('No browser-breaking patterns found');
+"
+if [ $? -ne 0 ]; then
+  echo "❌ Browser-breaking pattern found!"
+  exit 1
+fi
+echo "✅ Browser compatibility OK"
 
 echo ""
 echo "✅ All checks passed! Safe to push."

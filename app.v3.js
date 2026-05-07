@@ -986,57 +986,25 @@ async function loadMyLeagues() {
       return;
     }
 
-    // Build using DOM to avoid any quote issues
     wrap.style.display = '';
-    wrap.innerHTML = '';
-
-    var label = document.createElement('div');
-    label.style.cssText = 'font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
-    label.textContent = 'My recent leagues — tap to rejoin';
-    wrap.appendChild(label);
-
-    leagues.slice(0, 5).forEach(function(l) {
-      var tot = Object.keys(l.results || {}).length;
-      var don = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
-      var complete = l.isComplete;
-      var date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-
-      var chip = document.createElement('div');
-      chip.className = 'my-league-chip';
-
-      var row1 = document.createElement('div');
-      row1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
-
-      var left = document.createElement('div');
-      left.style.cssText = 'display:flex;align-items:center;gap:8px;';
-
-      var codeEl = document.createElement('span');
-      codeEl.style.cssText = 'font-weight:600;font-size:14px;letter-spacing:1px;';
-      codeEl.textContent = l.leagueCode;
-
-      var dateEl = document.createElement('span');
-      dateEl.style.cssText = 'font-size:12px;color:var(--text-tertiary);';
-      dateEl.textContent = date;
-
-      var pill = document.createElement('span');
-      pill.className = 'pill ' + (complete ? 'pill-done' : 'pill-pend');
-      pill.style.fontSize = '11px';
-      pill.textContent = complete ? '✓ Complete' : '● Active';
-
-      left.appendChild(codeEl);
-      left.appendChild(dateEl);
-      row1.appendChild(left);
-      row1.appendChild(pill);
-
-      var row2 = document.createElement('div');
-      row2.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-top:4px;';
-      row2.textContent = (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + don + '/' + tot + ' played';
-
-      chip.appendChild(row1);
-      chip.appendChild(row2);
-      chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
-      wrap.appendChild(chip);
-    });
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">My recent leagues — tap to rejoin</div>'
+      + leagues.slice(0, 5).map(l => {
+        const total = Object.keys(l.results || {}).length;
+        const done = Object.values(l.results || {}).filter(r => r.done).length;
+        const isComplete = l.isComplete;
+        const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
+          + '<span style="font-size:12px;color:var(--text-tertiary);">' + date + '</span>'
+          + '</div>'
+          + '<span class="pill ' + (isComplete ? 'pill-done' : 'pill-pend') + '" style="font-size:11px;">' + (isComplete ? '✓ Complete' : '● Active') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'
+          + (l.players || []).length + ' players · ' + (l.rounds || 0) + ' rounds · ' + done + '/' + total + ' matches played'
+          + '</div></div>';
+      }).join('');
   } catch(e) {
     console.error('loadMyLeagues error:', e);
     wrap.style.display = 'none';
@@ -1170,11 +1138,34 @@ async function generateLeague() {
   }
   localStorage.setItem('pickleball_last_code', leagueCode);
   showLeagueUI();
+
+  // Show the code modal immediately so user sees it before switching tabs
+  showCodeModal(leagueCode);
+
   await saveToFirebase();
   subscribeToLeague(leagueCode);
   renderSchedule();
   renderStandings();
+}
+
+function showCodeModal(code) {
+  const modal = document.getElementById('code-modal');
+  const codeEl = document.getElementById('code-modal-value');
+  if (!modal || !codeEl) return;
+  codeEl.textContent = code;
+  modal.style.display = 'flex';
+}
+
+function hideCodeModal() {
+  const modal = document.getElementById('code-modal');
+  if (modal) modal.style.display = 'none';
   gotoTab('schedule', document.getElementById('nav-schedule'));
+}
+
+function copyCodeModal() {
+  const code = document.getElementById('code-modal-value')?.textContent;
+  if (code) navigator.clipboard.writeText(code).catch(() => {});
+  showToast('Code copied!', 'link');
 }
 
 function generateFixed(players, rounds) {
@@ -1386,6 +1377,9 @@ window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
+window.showCodeModal = showCodeModal;
+window.hideCodeModal = hideCodeModal;
+window.copyCodeModal = copyCodeModal;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
 window.showUpgradeModal = showUpgradeModal;
@@ -1417,4 +1411,3 @@ onAuthStateChanged(auth, async user => {
   }
 });
 // CourtIQ v6 - Thu May  7 07:03:22 CDT 2026
-

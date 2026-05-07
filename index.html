@@ -54,6 +54,30 @@
   <div class="login-watermark">Powered by <strong>CourtIQ</strong> — by Pavan</div>
 </div>
 
+<!-- CODE MODAL — shown immediately after generating a league -->
+<div id="code-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(6px);">
+  <div style="background:#fff;border-radius:24px;padding:2rem;max-width:380px;width:100%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.25);">
+    <div style="width:56px;height:56px;background:#e8f8f2;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:28px;">🎉</div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;margin-bottom:6px;">League created!</h2>
+    <p style="font-size:14px;color:#5a5a56;margin-bottom:1.5rem;">Share this code with your players so they can join and view live scores.</p>
+
+    <div style="background:#f0f8ff;border:2px solid #378ADD;border-radius:14px;padding:1.25rem;margin-bottom:1.25rem;">
+      <div style="font-size:12px;color:#185FA5;font-weight:500;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">League Code</div>
+      <div id="code-modal-value" style="font-family:'DM Serif Display',serif;font-size:36px;font-weight:700;letter-spacing:8px;color:#0C447C;margin-bottom:8px;"></div>
+      <button onclick="copyCodeModal()"
+        style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        📋 Copy code
+      </button>
+    </div>
+
+    <button onclick="hideCodeModal()"
+      style="width:100%;padding:13px;background:#1D9E75;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;">
+      Go to Schedule →
+    </button>
+    <p style="font-size:12px;color:#9a9a94;margin-top:10px;">You can always find this code on the Setup tab</p>
+  </div>
+</div>
+
 <!-- UPGRADE MODAL -->
 <div id="upgrade-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
   <div style="background:#fff;border-radius:20px;padding:2rem;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);">

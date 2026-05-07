@@ -983,8 +983,7 @@ async function confirmSaveGroup() {
   if (!nameVal) { showToast('Enter a group name', 'error'); return; }
 
   // Parse and validate emails
-  const emails = emailsVal.split(/[,
-]+/).map(e => e.trim().toLowerCase()).filter(e => e.length > 0);
+  const emails = emailsVal.split(/[,\n]+/).map(e => e.trim().toLowerCase()).filter(e => e.length > 0);
   if (emails.length === 0) { showToast('Add at least one email address', 'error'); return; }
 
   // Validate email format

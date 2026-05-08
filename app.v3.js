@@ -1068,7 +1068,7 @@ async function loadMyLeagues() {
       wrap.appendChild(chip);
     });
 
-    } catch(e) {
+  } catch(e) {
     console.error('loadMyLeagues error:', e);
     wrap.style.display = 'none';
   }

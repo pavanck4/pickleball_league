@@ -1115,6 +1115,7 @@ async function checkAndShowPlayerSelect() {
     btn.addEventListener('click', async function() {
       await linkPlayerToUser(name);
       modal.style.display = 'none';
+      gotoTab('schedule', document.getElementById('nav-schedule'));
     });
     list.appendChild(btn);
   });

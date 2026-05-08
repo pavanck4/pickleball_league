@@ -1397,6 +1397,13 @@ function validateScore(s1, s2) {
   return null;
 }
 
+async function editScore(mid) {
+  if (!currentUser) { showToast('Sign in to edit scores', 'error'); return; }
+  if (!confirm('Edit this score?')) return;
+  S.results[mid] = { s1: S.results[mid]?.s1 || '', s2: S.results[mid]?.s2 || '', done: false };
+  renderSchedule();
+}
+
 async function submitScore(mid) {
   if (!currentUser) { showToast('Sign in to add scores', 'error'); return; }
   const s1 = parseInt(document.getElementById('s1-' + mid)?.value);
@@ -1449,7 +1456,7 @@ function renderSchedule() {
         + '<button class="btn-save" data-mid="' + match.id + '" onclick="submitScore(this.dataset.mid)">save</button>'
         + '</div><div id="err-' + match.id + '" class="match-err"></div>'
       : res.done
-        ? '<div class="score-display"><span class="score-num ' + (winner===1?'score-win':'') + '">' + res.s1 + '</span><span class="score-sep-display">—</span><span class="score-num ' + (winner===2?'score-win':'') + '">' + res.s2 + '</span></div>'
+        ? '<div class="score-display"><span class="score-num ' + (winner===1?'score-win':'') + '">' + res.s1 + '</span><span class="score-sep-display">—</span><span class="score-num ' + (winner===2?'score-win':'') + '">' + res.s2 + '</span>' + (currentUser ? '<button class="btn-edit-score" data-mid="' + match.id + '" onclick="editScore(this.dataset.mid)">Edit</button>' : '') + '</div>'
         : !currentUser
           ? '<div class="score-pending-msg">Sign in to enter scores</div>'
           : '<div class="score-pending-msg">Score not entered yet</div>';
@@ -1503,6 +1510,7 @@ window.refreshPlayerInputs = refreshPlayerInputs;
 window.generateLeague = generateLeague;
 window.joinLeague = joinLeague;
 window.submitScore = submitScore;
+window.editScore = editScore;
 window.confirmReset = confirmReset;
 window.copyCode = copyCode;
 window.forceSaveHistory = forceSaveHistory;

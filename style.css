@@ -1185,3 +1185,21 @@ input:focus {
   border-color: var(--green);
   color: var(--green-dark);
 }
+
+.btn-edit-score {
+  background: transparent;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  margin-left: 10px;
+  transition: all 0.15s;
+}
+.btn-edit-score:hover {
+  background: #fef2f2;
+  border-color: #c0392b;
+  color: #c0392b;
+}

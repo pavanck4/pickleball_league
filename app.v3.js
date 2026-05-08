@@ -1024,7 +1024,7 @@ async function loadMyLeagues() {
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
         const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
+        chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;">'
           + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'

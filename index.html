@@ -78,6 +78,20 @@
   </div>
 </div>
 
+<!-- PLAYER SELECT MODAL -->
+<div id="player-select-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(6px);">
+  <div style="background:#fff;border-radius:24px;padding:2rem;max-width:380px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.25);">
+    <div style="font-size:36px;text-align:center;margin-bottom:12px;">👋</div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;margin-bottom:6px;text-align:center;">Who are you?</h2>
+    <p style="font-size:14px;color:#5a5a56;margin-bottom:1.25rem;text-align:center;">Select your name from the player list so we can show your personal match schedule.</p>
+    <div id="player-select-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;max-height:280px;overflow-y:auto;"></div>
+    <button onclick="hidePlayerSelectModal()"
+      style="width:100%;padding:11px;background:transparent;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;color:#5a5a56;cursor:pointer;font-family:'DM Sans',sans-serif;">
+      Skip for now
+    </button>
+  </div>
+</div>
+
 <!-- UPGRADE MODAL -->
 <div id="upgrade-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
   <div style="background:#fff;border-radius:20px;padding:2rem;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);">

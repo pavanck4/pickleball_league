@@ -514,8 +514,12 @@ async function joinLeague(silent) {
     renderStandings();
     updateBanner();
     if (!silent) {
-      gotoTab('schedule', document.getElementById('nav-schedule'));
       showToast('Joined ' + code, 'link');
+      // Check if player needs to select their name
+      await checkAndShowPlayerSelect();
+      if (document.getElementById('player-select-modal')?.style.display !== 'flex') {
+        gotoTab('schedule', document.getElementById('nav-schedule'));
+      }
     }
   } catch (e) {
     if (!silent && errEl) errEl.textContent = 'Connection error.';
@@ -547,16 +551,32 @@ async function loadHistory() {
   if (!cont || !currentUser) return;
   cont.innerHTML = '<p class="muted">Loading…</p>';
   try {
+    // Load all history then filter to only leagues this user participated in
     const snap = await getDocs(query(collection(db, 'history'), orderBy('completedAt', 'desc')));
     if (snap.empty) { cont.innerHTML = '<p class="muted">No completed tournaments yet.</p>'; return; }
+
     const myLeagues = [];
     snap.forEach(d => {
       const data = d.data();
+      // Check if user is creator or member
       const isCreator = data.createdBy === currentUser.uid;
       const isMember = data.memberUids && data.memberUids[currentUser.uid];
-      if (isCreator || isMember || isAppAdmin()) myLeagues.push(data);
+      // Also check if user's name appears in players list (for legacy leagues)
+      const firstName = currentUser.displayName?.split(' ')[0]?.toLowerCase();
+      const isPlayer = (data.players || []).some(p => p?.toLowerCase() === firstName || p?.toLowerCase().startsWith(firstName));
+      // Admin sees all
+      const isAdmin = isAppAdmin();
+
+      if (isCreator || isMember || isPlayer || isAdmin) {
+        myLeagues.push(data);
+      }
     });
-    if (myLeagues.length === 0) { cont.innerHTML = '<p class="muted">No tournaments found. Join a league to see history here.</p>'; return; }
+
+    if (myLeagues.length === 0) {
+      cont.innerHTML = '<p class="muted">No tournaments found for your account. Join a league to see history here.</p>';
+      return;
+    }
+
     cont.innerHTML = '';
     myLeagues.forEach(d => cont.appendChild(buildHistoryCard(d)));
   } catch (e) {
@@ -808,7 +828,10 @@ function renderMySchedule() {
     return;
   }
 
-  const myName = currentUser.displayName?.split(' ')[0]?.toLowerCase();
+  // Use playerLinks if available, fallback to first name
+  const playerLinks = S.playerLinks || {};
+  const linkedName = playerLinks[currentUser.uid];
+  const myName = linkedName ? linkedName.toLowerCase() : currentUser.displayName?.split(' ')[0]?.toLowerCase();
   const matches = [];
 
   S.schedule.forEach((round, ri) => {
@@ -1001,7 +1024,7 @@ async function loadMyLeagues() {
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
         const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;">'
           + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
@@ -1023,6 +1046,80 @@ async function quickJoin(code) {
   const input = document.getElementById('join-code');
   if (input) input.value = code;
   await joinLeague(false);
+}
+
+// ── Player Linking ───────────────────────────────────────────────────────────
+async function checkAndShowPlayerSelect() {
+  if (!currentUser || !leagueCode || !S.players.length) return;
+
+  // Check if already linked
+  const snap = await getDoc(doc(db, 'leagues', leagueCode));
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const playerLinks = data.playerLinks || {};
+
+  // Already linked — skip
+  if (playerLinks[currentUser.uid]) return;
+
+  // Get unclaimed player names
+  const claimed = Object.values(playerLinks);
+  const unclaimed = S.players.filter(p => !claimed.includes(p));
+
+  if (unclaimed.length === 0) return;
+
+  // Show selection modal
+  const modal = document.getElementById('player-select-modal');
+  const list = document.getElementById('player-select-list');
+  if (!modal || !list) return;
+
+  list.innerHTML = '';
+  unclaimed.forEach(function(name) {
+    var btn = document.createElement('button');
+    btn.className = 'player-select-btn';
+    btn.textContent = name;
+    btn.addEventListener('click', async function() {
+      await linkPlayerToUser(name);
+      modal.style.display = 'none';
+    });
+    list.appendChild(btn);
+  });
+
+  modal.style.display = 'flex';
+}
+
+async function linkPlayerToUser(playerName) {
+  if (!currentUser || !leagueCode) return;
+  try {
+    const leagueRef = doc(db, 'leagues', leagueCode);
+    const snap = await getDoc(leagueRef);
+    if (!snap.exists()) return;
+    const playerLinks = snap.data().playerLinks || {};
+
+    // Check if name already claimed by someone else
+    if (Object.values(playerLinks).includes(playerName)) {
+      showToast('This name is already taken by another player', 'error');
+      return;
+    }
+
+    playerLinks[currentUser.uid] = playerName;
+    await setDoc(leagueRef, { playerLinks }, { merge: true });
+    showToast('Linked as ' + playerName + '!');
+
+    // Also update history doc
+    const histSnap = await getDoc(doc(db, 'history', leagueCode));
+    if (histSnap.exists()) {
+      await setDoc(doc(db, 'history', leagueCode), { playerLinks }, { merge: true });
+    }
+  } catch(e) {
+    console.error('Link player error:', e);
+    showToast('Could not link player', 'error');
+  }
+}
+
+function hidePlayerSelectModal() {
+  const modal = document.getElementById('player-select-modal');
+  if (modal) modal.style.display = 'none';
+  gotoTab('schedule', document.getElementById('nav-schedule'));
 }
 
 // ── League Setup ──────────────────────────────────────────────────────────────
@@ -1146,34 +1243,11 @@ async function generateLeague() {
   }
   localStorage.setItem('pickleball_last_code', leagueCode);
   showLeagueUI();
-
-  // Show the code modal immediately so user sees it before switching tabs
-  showCodeModal(leagueCode);
-
   await saveToFirebase();
   subscribeToLeague(leagueCode);
   renderSchedule();
   renderStandings();
-}
-
-function showCodeModal(code) {
-  const modal = document.getElementById('code-modal');
-  const codeEl = document.getElementById('code-modal-value');
-  if (!modal || !codeEl) return;
-  codeEl.textContent = code;
-  modal.style.display = 'flex';
-}
-
-function hideCodeModal() {
-  const modal = document.getElementById('code-modal');
-  if (modal) modal.style.display = 'none';
   gotoTab('schedule', document.getElementById('nav-schedule'));
-}
-
-function copyCodeModal() {
-  const code = document.getElementById('code-modal-value')?.textContent;
-  if (code) navigator.clipboard.writeText(code).catch(() => {});
-  showToast('Code copied!', 'link');
 }
 
 function generateFixed(players, rounds) {
@@ -1319,7 +1393,7 @@ function renderSchedule() {
         + '<span class="score-sep">—</span>'
         + '<input type="number" class="score-inp" min="0" max="99" value="' + res.s2 + '" placeholder="0" id="s2-' + match.id + '" oninput="S.results[\'' + match.id + '\'].s2=this.value;document.getElementById(\'err-' + match.id + '\').textContent=\'\';">'
         + '<span class="score-label">' + t2.name + '</span>'
-        + '<button class="btn-save" data-mid="' + match.id + '" onclick="submitScore(this.dataset.mid)">save</button>'
+        + '<button class="btn-save" onclick="submitScore(\'' + match.id + '\')">save</button>'
         + '</div><div id="err-' + match.id + '" class="match-err"></div>'
       : res.done
         ? '<div class="score-display"><span class="score-num ' + (winner===1?'score-win':'') + '">' + res.s1 + '</span><span class="score-sep-display">—</span><span class="score-num ' + (winner===2?'score-win':'') + '">' + res.s2 + '</span></div>'
@@ -1385,9 +1459,8 @@ window.deleteGroup = deleteGroup;
 window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
-window.showCodeModal = showCodeModal;
-window.hideCodeModal = hideCodeModal;
-window.copyCodeModal = copyCodeModal;
+window.hidePlayerSelectModal = hidePlayerSelectModal;
+window.linkPlayerToUser = linkPlayerToUser;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
 window.showUpgradeModal = showUpgradeModal;

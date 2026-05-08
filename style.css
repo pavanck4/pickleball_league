@@ -1164,3 +1164,24 @@ input:focus {
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
+
+/* ── Player Select Modal ── */
+.player-select-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+.player-select-btn:hover {
+  background: var(--green-light);
+  border-color: var(--green);
+  color: var(--green-dark);
+}

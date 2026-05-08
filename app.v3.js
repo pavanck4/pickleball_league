@@ -1050,7 +1050,8 @@ async function quickJoin(code) {
 
 // ── Player Linking ───────────────────────────────────────────────────────────
 async function checkAndShowPlayerSelect() {
-  if (!currentUser || !leagueCode || !S.players.length) return;
+  console.log('checkAndShowPlayerSelect called', {uid: currentUser?.uid, leagueCode, players: S.players.length});
+  if (!currentUser || !leagueCode || !S.players.length) { console.log('Early return - missing data'); return; }
 
   // Check if already linked
   const snap = await getDoc(doc(db, 'leagues', leagueCode));

@@ -1250,6 +1250,26 @@ async function generateLeague() {
   gotoTab('schedule', document.getElementById('nav-schedule'));
 }
 
+function showCodeModal(code) {
+  const modal = document.getElementById('code-modal');
+  const codeEl = document.getElementById('code-modal-value');
+  if (!modal || !codeEl) return;
+  codeEl.textContent = code;
+  modal.style.display = 'flex';
+}
+
+function hideCodeModal() {
+  const modal = document.getElementById('code-modal');
+  if (modal) modal.style.display = 'none';
+  gotoTab('schedule', document.getElementById('nav-schedule'));
+}
+
+function copyCodeModal() {
+  const code = document.getElementById('code-modal-value')?.textContent;
+  if (code) navigator.clipboard.writeText(code).catch(() => {});
+  showToast('Code copied!', 'link');
+}
+
 function generateFixed(players, rounds) {
   const shuffled = shuffle(players);
   const teams = [];
@@ -1460,6 +1480,9 @@ window.editGroup = editGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
 window.hidePlayerSelectModal = hidePlayerSelectModal;
+window.showCodeModal = showCodeModal;
+window.hideCodeModal = hideCodeModal;
+window.copyCodeModal = copyCodeModal;
 window.linkPlayerToUser = linkPlayerToUser;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;

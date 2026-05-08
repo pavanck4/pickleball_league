@@ -143,6 +143,7 @@
       <button class="nav-btn"        id="nav-myschedule"  onclick="gotoTab('myschedule',this)" style="display:none;">My Matches</button>
       <button class="nav-btn"        id="nav-standings"   onclick="gotoTab('standings',this)">Standings</button>
       <button class="nav-btn"        id="nav-history"     onclick="gotoTab('history',this)">History</button>
+      <button class="nav-btn"        id="nav-myleagues"   onclick="gotoTab('myleagues',this)">My Leagues</button>
       <button class="nav-btn"        id="nav-profile"     onclick="gotoTab('profile',this)">Profile</button>
       <button class="nav-btn"        id="nav-users"       onclick="gotoTab('users',this)">Players</button>
     </nav>
@@ -195,6 +196,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Home — My Recent Leagues -->
+      <div id="home-leagues-wrap" style="display:none;margin-bottom:1rem;"></div>
 
       <div class="card">
         <h3>Join an existing league</h3>
@@ -299,9 +303,17 @@
       <div id="history-list"></div>
     </div>
 
+    <!-- MY LEAGUES TAB -->
+    <div id="tab-myleagues" class="section">
+      <div class="page-title">
+        <h2>My Leagues</h2>
+        <p>All leagues you have created — tap to rejoin.</p>
+      </div>
+      <div id="my-leagues-wrap" style="display:none;"></div>
+    </div>
+
     <!-- PROFILE TAB -->
     <div id="tab-profile" class="section">
-      <div id="my-leagues-wrap" style="display:none;margin-bottom:1.5rem;"></div>
       <div id="profile-body"></div>
     </div>
 

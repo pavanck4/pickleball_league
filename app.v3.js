@@ -993,7 +993,7 @@ async function loadMyLeagues() {
         const done = Object.values(l.results || {}).filter(r => r.done).length;
         const isComplete = l.isComplete;
         const date = l.updatedAt ? new Date(l.updatedAt.seconds * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
-        chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
+        return '<div class="my-league-chip" onclick="quickJoin('' + l.leagueCode + '')">'
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;">'
           + '<span style="font-weight:600;font-size:14px;letter-spacing:1px;">' + l.leagueCode + '</span>'
@@ -1311,7 +1311,7 @@ function renderSchedule() {
         + '<span class="score-sep">—</span>'
         + '<input type="number" class="score-inp" min="0" max="99" value="' + res.s2 + '" placeholder="0" id="s2-' + match.id + '" oninput="S.results[\'' + match.id + '\'].s2=this.value;document.getElementById(\'err-' + match.id + '\').textContent=\'\';">'
         + '<span class="score-label">' + t2.name + '</span>'
-        + '<button class="btn-save" data-mid="' + match.id + '" onclick="submitScore(this.dataset.mid)">save</button>'
+        + '<button class="btn-save" onclick="submitScore(\'' + match.id + '\')">save</button>'
         + '</div><div id="err-' + match.id + '" class="match-err"></div>'
       : res.done
         ? '<div class="score-display"><span class="score-num ' + (winner===1?'score-win':'') + '">' + res.s1 + '</span><span class="score-sep-display">—</span><span class="score-num ' + (winner===2?'score-win':'') + '">' + res.s2 + '</span></div>'

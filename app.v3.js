@@ -1104,7 +1104,7 @@ async function loadMyLeagues() {
     label.textContent = 'My recent leagues — tap to rejoin';
     wrap.appendChild(label);
 
-    leagues.slice(0, 5).forEach(function(l) {
+    leagues.forEach(function(l) {
       var tot = Object.keys(l.results || {}).length;
       var don = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
       var complete = l.isComplete;

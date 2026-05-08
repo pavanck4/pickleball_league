@@ -1401,7 +1401,6 @@ function validateScore(s1, s2) {
 
 async function editScore(mid) {
   if (!currentUser) { showToast('Sign in to edit scores', 'error'); return; }
-  if (!confirm('Edit this score?')) return;
   S.results[mid] = { s1: S.results[mid]?.s1 || '', s2: S.results[mid]?.s2 || '', done: false };
   renderSchedule();
 }

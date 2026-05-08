@@ -1247,7 +1247,7 @@ async function generateLeague() {
   subscribeToLeague(leagueCode);
   renderSchedule();
   renderStandings();
-  gotoTab('schedule', document.getElementById('nav-schedule'));
+  showCodeModal(leagueCode);
 }
 
 function showCodeModal(code) {

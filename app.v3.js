@@ -1091,19 +1091,21 @@ async function checkAndShowPlayerSelect() {
   const data = snap.data();
   const playerLinks = data.playerLinks || {};
 
+  console.log('playerLinks:', playerLinks, 'myLink:', playerLinks[currentUser.uid]);
   // Already linked — skip
-  if (playerLinks[currentUser.uid]) return;
+  if (playerLinks[currentUser.uid]) { console.log('Already linked as:', playerLinks[currentUser.uid]); return; }
 
   // Get unclaimed player names
   const claimed = Object.values(playerLinks);
   const unclaimed = S.players.filter(p => !claimed.includes(p));
-
-  if (unclaimed.length === 0) return;
+  console.log('unclaimed players:', unclaimed);
+  if (unclaimed.length === 0) { console.log('All names claimed'); return; }
 
   // Show selection modal
   const modal = document.getElementById('player-select-modal');
   const list = document.getElementById('player-select-list');
-  if (!modal || !list) return;
+  console.log('modal:', modal, 'list:', list);
+  if (!modal || !list) { console.log('Modal elements not found!'); return; }
 
   list.innerHTML = '';
   unclaimed.forEach(function(name) {

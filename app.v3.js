@@ -1393,7 +1393,7 @@ function renderSchedule() {
         + '<span class="score-sep">—</span>'
         + '<input type="number" class="score-inp" min="0" max="99" value="' + res.s2 + '" placeholder="0" id="s2-' + match.id + '" oninput="S.results[\'' + match.id + '\'].s2=this.value;document.getElementById(\'err-' + match.id + '\').textContent=\'\';">'
         + '<span class="score-label">' + t2.name + '</span>'
-        + '<button class="btn-save" onclick="submitScore(\'' + match.id + '\')">save</button>'
+        + '<button class="btn-save" data-mid="' + match.id + '" onclick="submitScore(this.dataset.mid)">save</button>'
         + '</div><div id="err-' + match.id + '" class="match-err"></div>'
       : res.done
         ? '<div class="score-display"><span class="score-num ' + (winner===1?'score-win':'') + '">' + res.s1 + '</span><span class="score-sep-display">—</span><span class="score-num ' + (winner===2?'score-win':'') + '">' + res.s2 + '</span></div>'

@@ -544,13 +544,21 @@ async function forceSaveHistory() {
 
 async function loadHistory() {
   const cont = document.getElementById('history-list');
-  if (!cont) return;
+  if (!cont || !currentUser) return;
   cont.innerHTML = '<p class="muted">Loading…</p>';
   try {
     const snap = await getDocs(query(collection(db, 'history'), orderBy('completedAt', 'desc')));
     if (snap.empty) { cont.innerHTML = '<p class="muted">No completed tournaments yet.</p>'; return; }
+    const myLeagues = [];
+    snap.forEach(d => {
+      const data = d.data();
+      const isCreator = data.createdBy === currentUser.uid;
+      const isMember = data.memberUids && data.memberUids[currentUser.uid];
+      if (isCreator || isMember || isAppAdmin()) myLeagues.push(data);
+    });
+    if (myLeagues.length === 0) { cont.innerHTML = '<p class="muted">No tournaments found. Join a league to see history here.</p>'; return; }
     cont.innerHTML = '';
-    snap.forEach(d => cont.appendChild(buildHistoryCard(d.data())));
+    myLeagues.forEach(d => cont.appendChild(buildHistoryCard(d)));
   } catch (e) {
     cont.innerHTML = '<p class="muted">Could not load history.</p>';
     console.error(e);

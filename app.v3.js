@@ -342,7 +342,7 @@ function gotoTab(t, btn) {
   if (t === 'standings') renderStandings();
   if (t === 'schedule') renderSchedule();
   if (t === 'history') loadHistory();
-  if (t === 'profile') renderProfile();
+  if (t === 'profile') { renderProfile(); loadMyLeagues(); }
   if (t === 'myschedule') renderMySchedule();
   if (t === 'users') renderUsers();
 }
@@ -1082,6 +1082,8 @@ async function quickJoin(code) {
 
 // ── Player Linking ───────────────────────────────────────────────────────────
 async function checkAndShowPlayerSelect() {
+  console.log('checkAndShowPlayerSelect called', {uid: currentUser?.uid, leagueCode, players: S.players.length});
+  if (!currentUser || !leagueCode || !S.players.length) { console.log('Early return - missing data'); return; }
 
   // Check if already linked
   const snap = await getDoc(doc(db, 'leagues', leagueCode));
@@ -1089,15 +1091,20 @@ async function checkAndShowPlayerSelect() {
   const data = snap.data();
   const playerLinks = data.playerLinks || {};
 
+  console.log('playerLinks:', playerLinks, 'myLink:', playerLinks[currentUser.uid]);
   // Already linked — skip
+  if (playerLinks[currentUser.uid]) { console.log('Already linked as:', playerLinks[currentUser.uid]); return; }
 
   // Get unclaimed player names
   const claimed = Object.values(playerLinks);
   const unclaimed = S.players.filter(p => !claimed.includes(p));
+  console.log('unclaimed players:', unclaimed);
+  if (unclaimed.length === 0) { console.log('All names claimed'); return; }
 
   // Show selection modal
   const modal = document.getElementById('player-select-modal');
   const list = document.getElementById('player-select-list');
+  console.log('modal:', modal, 'list:', list);
   if (!modal || !list) { console.log('Modal elements not found!'); return; }
 
   list.innerHTML = '';
@@ -1545,7 +1552,6 @@ onAuthStateChanged(auth, async user => {
     clearPlayerInputs();
     await loadUserData();
     await loadGroupsFromFirebase();
-    loadMyLeagues();
     // Do NOT auto-rejoin — user should explicitly join or create a league
     // This prevents showing other users' leagues on shared devices
   }

@@ -138,7 +138,7 @@
 
   <div class="nav-wrap">
     <nav class="nav">
-      <button class="nav-btn active" id="nav-setup"       onclick="gotoTab('setup',this)">Setup</button>
+      <button class="nav-btn active" id="nav-setup"       onclick="gotoTab('setup',this)">Home</button>
       <button class="nav-btn"        id="nav-schedule"    onclick="gotoTab('schedule',this)">Schedule</button>
       <button class="nav-btn"        id="nav-myschedule"  onclick="gotoTab('myschedule',this)" style="display:none;">My Matches</button>
       <button class="nav-btn"        id="nav-standings"   onclick="gotoTab('standings',this)">Standings</button>
@@ -205,9 +205,6 @@
         </div>
         <div id="join-err" class="err-msg" style="margin-top:6px;margin-bottom:0;"></div>
       </div>
-
-      <!-- My Leagues -->
-      <div id="my-leagues-wrap" style="display:none;margin-bottom:1rem;"></div>
 
       <div class="divider-or"><span>or create a new league</span></div>
 
@@ -304,6 +301,7 @@
 
     <!-- PROFILE TAB -->
     <div id="tab-profile" class="section">
+      <div id="my-leagues-wrap" style="display:none;margin-bottom:1.5rem;"></div>
       <div id="profile-body"></div>
     </div>
 

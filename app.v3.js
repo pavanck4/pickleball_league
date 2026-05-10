@@ -998,6 +998,79 @@ function renderGroups() {
 }
 
 // ── My Leagues ────────────────────────────────────────────────────────────────
+async function loadHomeLeagues() {
+  if (!currentUser) return;
+  const wrap = document.getElementById('home-leagues-wrap');
+  if (!wrap) return;
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'leagues'),
+      where('createdBy', '==', currentUser.uid),
+      orderBy('updatedAt', 'desc')
+    ));
+    const leagues = [];
+    snap.forEach(d => leagues.push(d.data()));
+    if (leagues.length === 0) { wrap.style.display = 'none'; return; }
+
+    wrap.style.display = '';
+    wrap.innerHTML = '';
+
+    var label = document.createElement('div');
+    label.style.cssText = 'font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
+    label.textContent = 'My recent leagues';
+    wrap.appendChild(label);
+
+    // Active first then complete, max 3
+    var sorted = leagues.slice().sort(function(a, b) {
+      if (!a.isComplete && b.isComplete) return -1;
+      if (a.isComplete && !b.isComplete) return 1;
+      return 0;
+    }).slice(0, 3);
+
+    sorted.forEach(function(l) {
+      var tot = Object.keys(l.results || {}).length;
+      var don = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
+      var chip = document.createElement('div');
+      chip.className = 'my-league-chip';
+
+      var row1 = document.createElement('div');
+      row1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+
+      var codeEl = document.createElement('span');
+      codeEl.style.cssText = 'font-weight:600;font-size:14px;letter-spacing:1px;';
+      codeEl.textContent = l.leagueCode;
+
+      var pill = document.createElement('span');
+      pill.className = 'pill ' + (l.isComplete ? 'pill-done' : 'pill-pend');
+      pill.style.fontSize = '11px';
+      pill.textContent = l.isComplete ? '✓ Complete' : '● Active';
+
+      row1.appendChild(codeEl);
+      row1.appendChild(pill);
+
+      var row2 = document.createElement('div');
+      row2.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-top:4px;';
+      row2.textContent = (l.players || []).length + ' players · ' + don + '/' + tot + ' played';
+
+      chip.appendChild(row1);
+      chip.appendChild(row2);
+      chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
+      wrap.appendChild(chip);
+    });
+
+    if (leagues.length > 3) {
+      var seeAll = document.createElement('button');
+      seeAll.style.cssText = 'background:none;border:none;color:var(--green);font-size:13px;cursor:pointer;padding:4px 0;font-family:inherit;font-weight:500;';
+      seeAll.textContent = 'See all ' + leagues.length + ' leagues →';
+      seeAll.addEventListener('click', function() { gotoTab('myleagues', document.getElementById('nav-myleagues')); });
+      wrap.appendChild(seeAll);
+    }
+  } catch(e) {
+    console.error('loadHomeLeagues error:', e);
+    wrap.style.display = 'none';
+  }
+}
+
 async function loadMyLeagues() {
   if (!currentUser) return;
   const wrap = document.getElementById('my-leagues-wrap');
@@ -1557,6 +1630,7 @@ window.copyCodeModal = copyCodeModal;
 window.linkPlayerToUser = linkPlayerToUser;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
+window.loadHomeLeagues = loadHomeLeagues;
 window.showUpgradeModal = showUpgradeModal;
 window.hideUpgradeModal = hideUpgradeModal;
 window.logout = logout;
@@ -1580,7 +1654,7 @@ onAuthStateChanged(auth, async user => {
     clearPlayerInputs();
     await loadUserData();
     await loadGroupsFromFirebase();
-    loadMyLeagues();
+    loadHomeLeagues();
     // Do NOT auto-rejoin — user should explicitly join or create a league
     // This prevents showing other users' leagues on shared devices
   }

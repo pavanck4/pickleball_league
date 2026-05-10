@@ -1223,37 +1223,28 @@ function updateBanner() {
 
 function shareWhatsApp() {
   if (!leagueCode) return;
-  const total = S.schedule.reduce((s, r) => s + r.length, 0);
-  const done = Object.values(S.results).filter(r => r.done).length;
-  const standings = calcStandings(S);
-  const top3 = standings.slice(0, 3);
-  const medals = ['🥇', '🥈', '🥉'];
+  var total = S.schedule.reduce(function(s, r) { return s + r.length; }, 0);
+  var done = Object.values(S.results).filter(function(r) { return r.done; }).length;
+  var standings = calcStandings(S);
+  var top3 = standings.slice(0, 3);
+  var medals = ['🥇', '🥈', '🥉'];
 
-  let msg = '🏓 *CourtIQ Pickleball League*
-
-';
-  msg += 'League Code: *' + leagueCode + '*
-';
-  msg += (S.players.length || S.teams.length * 2) + ' players · ' + S.rounds + ' rounds · ' + done + '/' + total + ' matches
-
-';
+  var msg = '🏓 *CourtIQ Pickleball League*\n\n';
+  msg += 'League Code: *' + leagueCode + '*\n';
+  msg += (S.players.length || S.teams.length * 2) + ' players · ' + S.rounds + ' rounds · ' + done + '/' + total + ' matches\n\n';
 
   if (done > 0) {
-    msg += '📊 *Current Standings:*
-';
-    top3.forEach((s, i) => {
-      msg += medals[i] + ' ' + s.name + ' — ' + s.pts + ' pts
-';
+    msg += '📊 *Current Standings:*\n';
+    top3.forEach(function(s, i) {
+      msg += medals[i] + ' ' + s.name + ' — ' + s.pts + ' pts\n';
     });
-    msg += '
-';
+    msg += '\n';
   }
 
-  msg += '👉 Join here: https://pickleball-league-liard.vercel.app
-';
+  msg += '👉 Join here: https://pickleball-league-liard.vercel.app\n';
   msg += 'Enter code *' + leagueCode + '* to view live scores!';
 
-  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  var url = 'https://wa.me/?text=' + encodeURIComponent(msg);
   window.open(url, '_blank');
 }
 

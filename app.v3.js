@@ -343,7 +343,6 @@ function gotoTab(t, btn) {
   if (t === 'schedule') renderSchedule();
   if (t === 'history') loadHistory();
   if (t === 'profile') renderProfile();
-  if (t === 'myleagues') loadMyLeagues();
   if (t === 'myschedule') renderMySchedule();
   if (t === 'users') renderUsers();
 }
@@ -999,84 +998,6 @@ function renderGroups() {
 }
 
 // ── My Leagues ────────────────────────────────────────────────────────────────
-async function loadHomeLeagues() {
-  if (!currentUser) return;
-  const wrap = document.getElementById('home-leagues-wrap');
-  if (!wrap) return;
-
-  try {
-    const created = await getDocs(query(
-      collection(db, 'leagues'),
-      where('createdBy', '==', currentUser.uid),
-      orderBy('updatedAt', 'desc')
-    ));
-    const leagues = [];
-    created.forEach(d => leagues.push(d.data()));
-
-    if (leagues.length === 0) { wrap.style.display = 'none'; return; }
-
-    wrap.style.display = '';
-    wrap.innerHTML = '';
-
-    var label = document.createElement('div');
-    label.style.cssText = 'font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
-    label.textContent = 'My recent leagues';
-    wrap.appendChild(label);
-
-    // Show active leagues first, then complete, max 3
-    var sorted = leagues.slice().sort(function(a, b) {
-      if (!a.isComplete && b.isComplete) return -1;
-      if (a.isComplete && !b.isComplete) return 1;
-      return 0;
-    }).slice(0, 3);
-
-    sorted.forEach(function(l) {
-      var tot = Object.keys(l.results || {}).length;
-      var don = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
-      var complete = l.isComplete;
-
-      var chip = document.createElement('div');
-      chip.className = 'my-league-chip';
-
-      var row1 = document.createElement('div');
-      row1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
-
-      var codeEl = document.createElement('span');
-      codeEl.style.cssText = 'font-weight:600;font-size:14px;letter-spacing:1px;';
-      codeEl.textContent = l.leagueCode;
-
-      var pill = document.createElement('span');
-      pill.className = 'pill ' + (complete ? 'pill-done' : 'pill-pend');
-      pill.style.fontSize = '11px';
-      pill.textContent = complete ? '✓ Complete' : '● Active';
-
-      row1.appendChild(codeEl);
-      row1.appendChild(pill);
-
-      var row2 = document.createElement('div');
-      row2.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-top:4px;';
-      row2.textContent = (l.players || []).length + ' players · ' + don + '/' + tot + ' played';
-
-      chip.appendChild(row1);
-      chip.appendChild(row2);
-      chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
-      wrap.appendChild(chip);
-    });
-
-    // Show "See all" link if more than 3
-    if (leagues.length > 3) {
-      var seeAll = document.createElement('button');
-      seeAll.style.cssText = 'background:none;border:none;color:var(--green);font-size:13px;cursor:pointer;padding:4px 0;font-family:inherit;font-weight:500;';
-      seeAll.textContent = 'See all ' + leagues.length + ' leagues →';
-      seeAll.addEventListener('click', function() { gotoTab('myleagues', document.getElementById('nav-myleagues')); });
-      wrap.appendChild(seeAll);
-    }
-  } catch(e) {
-    console.error('loadHomeLeagues error:', e);
-    wrap.style.display = 'none';
-  }
-}
-
 async function loadMyLeagues() {
   if (!currentUser) return;
   const wrap = document.getElementById('my-leagues-wrap');
@@ -1104,7 +1025,7 @@ async function loadMyLeagues() {
     label.textContent = 'My recent leagues — tap to rejoin';
     wrap.appendChild(label);
 
-    leagues.forEach(function(l) {
+    leagues.slice(0, 5).forEach(function(l) {
       var tot = Object.keys(l.results || {}).length;
       var don = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
       var complete = l.isComplete;
@@ -1298,6 +1219,42 @@ function updateBanner() {
   const done = Object.values(S.results).filter(r => r.done).length;
   const el = document.getElementById('saved-banner-text');
   if (el) el.textContent = 'League ' + leagueCode + ' · ' + done + '/' + total + ' matches · live sync';
+}
+
+function shareWhatsApp() {
+  if (!leagueCode) return;
+  const total = S.schedule.reduce((s, r) => s + r.length, 0);
+  const done = Object.values(S.results).filter(r => r.done).length;
+  const standings = calcStandings(S);
+  const top3 = standings.slice(0, 3);
+  const medals = ['🥇', '🥈', '🥉'];
+
+  let msg = '🏓 *CourtIQ Pickleball League*
+
+';
+  msg += 'League Code: *' + leagueCode + '*
+';
+  msg += (S.players.length || S.teams.length * 2) + ' players · ' + S.rounds + ' rounds · ' + done + '/' + total + ' matches
+
+';
+
+  if (done > 0) {
+    msg += '📊 *Current Standings:*
+';
+    top3.forEach((s, i) => {
+      msg += medals[i] + ' ' + s.name + ' — ' + s.pts + ' pts
+';
+    });
+    msg += '
+';
+  }
+
+  msg += '👉 Join here: https://pickleball-league-liard.vercel.app
+';
+  msg += 'Enter code *' + leagueCode + '* to view live scores!';
+
+  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
 }
 
 function copyCode() {
@@ -1594,6 +1551,7 @@ window.submitScore = submitScore;
 window.editScore = editScore;
 window.confirmReset = confirmReset;
 window.copyCode = copyCode;
+window.shareWhatsApp = shareWhatsApp;
 window.forceSaveHistory = forceSaveHistory;
 window.saveCurrentAsGroup = saveCurrentAsGroup;
 window.loadGroup = loadGroup;
@@ -1608,7 +1566,6 @@ window.copyCodeModal = copyCodeModal;
 window.linkPlayerToUser = linkPlayerToUser;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
-window.loadHomeLeagues = loadHomeLeagues;
 window.showUpgradeModal = showUpgradeModal;
 window.hideUpgradeModal = hideUpgradeModal;
 window.logout = logout;
@@ -1632,7 +1589,6 @@ onAuthStateChanged(auth, async user => {
     clearPlayerInputs();
     await loadUserData();
     await loadGroupsFromFirebase();
-    loadHomeLeagues();
     loadMyLeagues();
     // Do NOT auto-rejoin — user should explicitly join or create a league
     // This prevents showing other users' leagues on shared devices

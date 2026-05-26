@@ -376,16 +376,34 @@ function toFirestore(state) {
 }
 
 function fromFirestore(data) {
+  const players = data.players || [];
+  const paddedPlayers = data.paddedPlayers || (players.length % 2 !== 0 ? [...players, 'BYE'] : players);
+  const schedule = deserializeSchedule(data.schedule, data.rounds);
+
+  // Re-mark bye matches after deserialization
+  if (players.length % 2 !== 0) {
+    schedule.forEach(function(round) {
+      round.forEach(function(m) {
+        var t1names = (m.t1pair || []).map(function(i) { return paddedPlayers[i]; });
+        var t2names = (m.t2pair || []).map(function(i) { return paddedPlayers[i]; });
+        if (t1names.includes('BYE') || t2names.includes('BYE')) {
+          m.isBye = true;
+          m.byePlayer = t1names.includes('BYE') ? t2names[0] : t1names[0];
+        }
+      });
+    });
+  }
+
   return {
-    mode: data.mode || 'fixed',
-    players: data.players || [],
+    mode: data.mode || 'rotate',
+    players: players,
     teams: data.teams || [],
     rounds: data.rounds || 0,
-    schedule: deserializeSchedule(data.schedule, data.rounds),
+    schedule: schedule,
     results: data.results || {},
     byeSchedule: data.byeSchedule || [],
     playerLinks: data.playerLinks || {},
-    paddedPlayers: data.paddedPlayers || data.players || []
+    paddedPlayers: paddedPlayers
   };
 }
 
@@ -1267,7 +1285,7 @@ function confirmReset() {
   if (!confirm('Reset the league? All scores will be cleared.')) return;
   if (unsubscribe) unsubscribe();
   leagueCode = null;
-  S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
+  S = { mode: 'rotate', players: [], teams: [], rounds: 0, schedule: [], results: {} };
   activeRound = 0;
   localStorage.removeItem('pickleball_last_code');
   document.getElementById('reset-btn').style.display = 'none';

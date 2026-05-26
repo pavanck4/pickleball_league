@@ -1172,8 +1172,9 @@ function selectMode(m) {
 
 function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
-  if (n % 2 !== 0) n++;
-  n = Math.max(4, Math.min(20, n));
+  n = Math.max(3, Math.min(20, n));
+  // Fixed mode needs even numbers (teams of 2), rotating allows odd
+  if (S.mode === 'fixed' && n % 2 !== 0) n++;
   // Show upgrade hint if over free limit
   const hint = document.getElementById('player-limit-hint');
   if (hint) hint.style.display = (!isPro() && n > FREE_PLAYER_LIMIT) ? '' : 'none';

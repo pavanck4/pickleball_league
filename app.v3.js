@@ -77,7 +77,7 @@ function updatePlanBadge() {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let S = { mode: 'fixed', players: [], teams: [], rounds: 0, schedule: [], results: {} };
+let S = { mode: 'rotate', players: [], teams: [], rounds: 0, schedule: [], results: {} };
 let activeRound = 0;
 let leagueCode = null;
 let currentUser = null;
@@ -370,7 +370,8 @@ function toFirestore(state) {
     rounds: state.rounds,
     schedule: serializeSchedule(state.schedule),
     results: state.results,
-    byeSchedule: state.byeSchedule || []
+    byeSchedule: state.byeSchedule || [],
+    paddedPlayers: state.paddedPlayers || state.players
   };
 }
 
@@ -383,7 +384,8 @@ function fromFirestore(data) {
     schedule: deserializeSchedule(data.schedule, data.rounds),
     results: data.results || {},
     byeSchedule: data.byeSchedule || [],
-    playerLinks: data.playerLinks || {}
+    playerLinks: data.playerLinks || {},
+    paddedPlayers: data.paddedPlayers || data.players || []
   };
 }
 
@@ -1170,6 +1172,9 @@ function selectMode(m) {
   refreshPlayerInputs();
 }
 
+// Set default mode to rotate on load
+S.mode = 'rotate';
+
 function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
   n = Math.max(3, Math.min(20, n));
@@ -1370,6 +1375,7 @@ function generateRotating(players, rounds) {
   var byeSchedule = isOdd ? generateByeSchedule(players, rounds) : [];
   S.byeSchedule = byeSchedule;
   var paddedPlayers = isOdd ? [...players, 'BYE'] : players;
+  S.paddedPlayers = paddedPlayers; // Store for getTeamLabel
   S.schedule = buildRotatingSchedule(paddedPlayers, rounds);
   // Mark bye matches
   if (isOdd) {
@@ -1444,7 +1450,8 @@ function buildRotatingSchedule(players, rounds) {
 function getTeamLabel(match, side) {
   if (match.type === 'rotate') {
     const pair = side === 1 ? match.t1pair : match.t2pair;
-    return { name: (S.players[pair[0]]||'').split(' ')[0] + ' & ' + (S.players[pair[1]]||'').split(' ')[0], players: [S.players[pair[0]], S.players[pair[1]]] };
+    const playerList = S.paddedPlayers || S.players;
+    return { name: (playerList[pair[0]]||'').split(' ')[0] + ' & ' + (playerList[pair[1]]||'').split(' ')[0], players: [playerList[pair[0]], playerList[pair[1]]] };
   }
   const t = S.teams[side === 1 ? match.t1 : match.t2];
   return { name: t.name, players: t.players };

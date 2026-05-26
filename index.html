@@ -243,15 +243,15 @@
       <div class="card">
         <h3>League mode</h3>
         <div class="mode-picker">
-          <div class="mode-card selected" id="mc-fixed" onclick="selectMode('fixed')">
-            <span class="mode-tag tag-fixed">Fixed partners</span>
-            <div class="mode-title">Fixed partners</div>
-            <div class="mode-desc">Teams stay together the whole league. 10 players = 5 permanent teams.</div>
-          </div>
-          <div class="mode-card" id="mc-rotate" onclick="selectMode('rotate')">
+          <div class="mode-card selected" id="mc-rotate" onclick="selectMode('rotate')">
             <span class="mode-tag tag-rotate">Rotating partners</span>
             <div class="mode-title">Rotating partners</div>
             <div class="mode-desc">Partners change each round. Players ranked individually.</div>
+          </div>
+          <div class="mode-card" id="mc-fixed" onclick="selectMode('fixed')">
+            <span class="mode-tag tag-fixed">Fixed partners</span>
+            <div class="mode-title">Fixed partners</div>
+            <div class="mode-desc">Teams stay together the whole league. 10 players = 5 permanent teams.</div>
           </div>
         </div>
       </div>
@@ -260,8 +260,8 @@
         <h3>Players &amp; rounds</h3>
         <div class="grid2">
           <div>
-            <label class="field-label">Number of players (odd = 1 player gets bye per round)</label>
-            <input type="number" id="inp-n" min="3" max="20" step="1" value="6" oninput="refreshPlayerInputs()">
+            <label class="field-label">Number of players (even)</label>
+            <input type="number" id="inp-n" min="4" max="20" step="2" value="6" oninput="refreshPlayerInputs()">
             <div id="player-limit-hint" style="font-size:12px;color:#633806;margin-top:4px;display:none;">
               Free plan: max 8 players. <span style="color:#1D9E75;cursor:pointer;text-decoration:underline;" onclick="showUpgradeModal()">Upgrade to Pro →</span>
             </div>

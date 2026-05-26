@@ -1399,7 +1399,9 @@ function generateRotating(players, rounds) {
     for (var r = 0; r < rounds; r++) {
       var byeIdx = byeList[r];
       var activePlayers = players.filter(function(_, i) { return i !== byeIdx; });
+      console.log('Round', r, 'bye:', players[byeIdx], 'active:', activePlayers);
       var roundMatches = buildOneRound(activePlayers, r, players);
+      console.log('Round', r, 'matches:', roundMatches.length);
       var byeCard = { id: 'r'+r+'bye', round: r, isBye: true, byePlayer: players[byeIdx], type: 'rotate' };
       schedule.push([byeCard].concat(roundMatches));
     }

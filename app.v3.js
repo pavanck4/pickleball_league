@@ -1390,27 +1390,42 @@ function generateByeSchedule(players, rounds) {
 function generateRotating(players, rounds) {
   S.teams = players.map((p, i) => ({ id: i, name: p, players: [p] }));
   var isOdd = players.length % 2 !== 0;
-  var byeSchedule = isOdd ? generateByeSchedule(players, rounds) : [];
-  S.byeSchedule = byeSchedule;
-  var paddedPlayers = isOdd ? [...players, 'BYE'] : players;
-  S.paddedPlayers = paddedPlayers; // Store for getTeamLabel
-  S.schedule = buildRotatingSchedule(paddedPlayers, rounds);
-  // Mark bye matches
+  var byeList = isOdd ? generateByeSchedule(players, rounds) : [];
+  S.byeSchedule = byeList;
+  S.paddedPlayers = players; // Store original players
+
   if (isOdd) {
-    S.schedule.forEach(function(round, ri) {
-      round.forEach(function(m) {
-        var t1names = (m.t1pair || []).map(function(i) { return paddedPlayers[i]; });
-        var t2names = (m.t2pair || []).map(function(i) { return paddedPlayers[i]; });
-        if (t1names.includes('BYE') || t2names.includes('BYE')) {
-          m.isBye = true;
-          m.byePlayer = t1names.includes('BYE') ? t2names[0] : t1names[0];
-        }
-      });
-    });
+    var schedule = [];
+    for (var r = 0; r < rounds; r++) {
+      var byeIdx = byeList[r];
+      var activePlayers = players.filter(function(_, i) { return i !== byeIdx; });
+      var roundMatches = buildOneRound(activePlayers, r, players);
+      var byeCard = { id: 'r'+r+'bye', round: r, isBye: true, byePlayer: players[byeIdx], type: 'rotate' };
+      schedule.push([byeCard].concat(roundMatches));
+    }
+    S.schedule = schedule;
+  } else {
+    S.schedule = buildRotatingSchedule(players, rounds);
   }
-  S.schedule.forEach(r => r.forEach(m => {
-    if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
-  }));
+
+  S.schedule.forEach(function(r) {
+    r.forEach(function(m) {
+      if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
+    });
+  });
+}
+
+function buildOneRound(activePlayers, roundIdx, allPlayers) {
+  var shuffled = shuffle(activePlayers.slice());
+  var matches = [];
+  for (var i = 0; i + 3 < shuffled.length; i += 4) {
+    var t1 = [shuffled[i], shuffled[i+1]];
+    var t2 = [shuffled[i+2], shuffled[i+3]];
+    var t1pair = t1.map(function(name) { return allPlayers.indexOf(name); });
+    var t2pair = t2.map(function(name) { return allPlayers.indexOf(name); });
+    matches.push({ id: 'r'+roundIdx+'m'+matches.length, round: roundIdx, t1pair: t1pair, t2pair: t2pair, type: 'rotate' });
+  }
+  return matches;
 }
 
 function buildRRSchedule(ids, rounds) {

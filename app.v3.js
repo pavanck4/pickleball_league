@@ -1205,6 +1205,9 @@ function refreshPlayerInputs(preload) {
   n = Math.max(3, Math.min(20, n));
   // Fixed mode needs even numbers (teams of 2), rotating allows odd
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
+  // Set rounds = number of players by default (user can adjust)
+  const roundsEl = document.getElementById('inp-r');
+  if (roundsEl && !preload) roundsEl.value = n;
   // Show upgrade hint if over free limit
   const hint = document.getElementById('player-limit-hint');
   if (hint) hint.style.display = (!isPro() && n > FREE_PLAYER_LIMIT) ? '' : 'none';

@@ -369,7 +369,8 @@ function toFirestore(state) {
     teams: state.teams,
     rounds: state.rounds,
     schedule: serializeSchedule(state.schedule),
-    results: state.results
+    results: state.results,
+    byeSchedule: state.byeSchedule || []
   };
 }
 
@@ -380,7 +381,9 @@ function fromFirestore(data) {
     teams: data.teams || [],
     rounds: data.rounds || 0,
     schedule: deserializeSchedule(data.schedule, data.rounds),
-    results: data.results || {}
+    results: data.results || {},
+    byeSchedule: data.byeSchedule || [],
+    playerLinks: data.playerLinks || {}
   };
 }
 
@@ -406,10 +409,11 @@ function calcStandings(state) {
     const stats = {};
     state.players.forEach((p, i) => { stats[i] = { name: p, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0, diff: 0 }; });
     state.schedule.forEach(r => r.forEach(m => {
+      if (m.isBye) return; // Skip bye matches
       const res = state.results[m.id];
       if (!res || !res.done) return;
       const s1 = parseInt(res.s1), s2 = parseInt(res.s2);
-      (m.t1pair || []).forEach(p => { if (!stats[p]) return; stats[p].played++; stats[p].scored += s1; stats[p].conceded += s2; if (s1 > s2) { stats[p].wins++; stats[p].pts += 2; } else stats[p].losses++; });
+      (m.t1pair || []).forEach(p => { if (!stats[p]) return; if (p === 'BYE') return; stats[p].played++; stats[p].scored += s1; stats[p].conceded += s2; if (s1 > s2) { stats[p].wins++; stats[p].pts += 2; } else stats[p].losses++; });
       (m.t2pair || []).forEach(p => { if (!stats[p]) return; stats[p].played++; stats[p].scored += s2; stats[p].conceded += s1; if (s2 > s1) { stats[p].wins++; stats[p].pts += 2; } else stats[p].losses++; });
     }));
     return Object.values(stats).map(s => ({ ...s, diff: s.scored - s.conceded })).sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
@@ -998,79 +1002,6 @@ function renderGroups() {
 }
 
 // ── My Leagues ────────────────────────────────────────────────────────────────
-async function loadHomeLeagues() {
-  if (!currentUser) return;
-  const wrap = document.getElementById('home-leagues-wrap');
-  if (!wrap) return;
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'leagues'),
-      where('createdBy', '==', currentUser.uid),
-      orderBy('updatedAt', 'desc')
-    ));
-    const leagues = [];
-    snap.forEach(d => leagues.push(d.data()));
-    if (leagues.length === 0) { wrap.style.display = 'none'; return; }
-
-    wrap.style.display = '';
-    wrap.innerHTML = '';
-
-    var label = document.createElement('div');
-    label.style.cssText = 'font-size:12px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
-    label.textContent = 'My recent leagues';
-    wrap.appendChild(label);
-
-    // Active first then complete, max 3
-    var sorted = leagues.slice().sort(function(a, b) {
-      if (!a.isComplete && b.isComplete) return -1;
-      if (a.isComplete && !b.isComplete) return 1;
-      return 0;
-    }).slice(0, 3);
-
-    sorted.forEach(function(l) {
-      var tot = Object.keys(l.results || {}).length;
-      var don = Object.values(l.results || {}).filter(function(r) { return r.done; }).length;
-      var chip = document.createElement('div');
-      chip.className = 'my-league-chip';
-
-      var row1 = document.createElement('div');
-      row1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
-
-      var codeEl = document.createElement('span');
-      codeEl.style.cssText = 'font-weight:600;font-size:14px;letter-spacing:1px;';
-      codeEl.textContent = l.leagueCode;
-
-      var pill = document.createElement('span');
-      pill.className = 'pill ' + (l.isComplete ? 'pill-done' : 'pill-pend');
-      pill.style.fontSize = '11px';
-      pill.textContent = l.isComplete ? '✓ Complete' : '● Active';
-
-      row1.appendChild(codeEl);
-      row1.appendChild(pill);
-
-      var row2 = document.createElement('div');
-      row2.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-top:4px;';
-      row2.textContent = (l.players || []).length + ' players · ' + don + '/' + tot + ' played';
-
-      chip.appendChild(row1);
-      chip.appendChild(row2);
-      chip.addEventListener('click', function() { quickJoin(l.leagueCode); });
-      wrap.appendChild(chip);
-    });
-
-    if (leagues.length > 3) {
-      var seeAll = document.createElement('button');
-      seeAll.style.cssText = 'background:none;border:none;color:var(--green);font-size:13px;cursor:pointer;padding:4px 0;font-family:inherit;font-weight:500;';
-      seeAll.textContent = 'See all ' + leagues.length + ' leagues →';
-      seeAll.addEventListener('click', function() { gotoTab('myleagues', document.getElementById('nav-myleagues')); });
-      wrap.appendChild(seeAll);
-    }
-  } catch(e) {
-    console.error('loadHomeLeagues error:', e);
-    wrap.style.display = 'none';
-  }
-}
-
 async function loadMyLeagues() {
   if (!currentUser) return;
   const wrap = document.getElementById('my-leagues-wrap');
@@ -1261,8 +1192,8 @@ function refreshPlayerInputs(preload) {
 
 function clearPlayerInputs() {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
-  if (n % 2 !== 0) n++;
-  n = Math.max(4, Math.min(20, n));
+  n = Math.max(3, Math.min(20, n));
+  if (S.mode === 'fixed' && n % 2 !== 0) n++;
   const cont = document.getElementById('player-inputs');
   if (!cont) return;
   cont.innerHTML = '';
@@ -1352,7 +1283,8 @@ async function generateLeague() {
   const rounds = parseInt(document.getElementById('inp-r').value) || 3;
   const errEl = document.getElementById('setup-err');
   errEl.textContent = '';
-  if (n < 4 || n % 2 !== 0) { errEl.textContent = 'Need an even number of players (min 4).'; return; }
+  if (S.mode === 'fixed' && n < 4) { errEl.textContent = 'Need at least 4 players for doubles.'; return; }
+  if (S.mode === 'rotate' && n < 3) { errEl.textContent = 'Need at least 3 players for rotating mode.'; return; }
   if (rounds < 1) { errEl.textContent = 'Need at least 1 round.'; return; }
 
   // Free tier limit
@@ -1416,10 +1348,44 @@ function generateFixed(players, rounds) {
   S.schedule.forEach(r => r.forEach(m => { S.results[m.id] = { s1: '', s2: '', done: false }; }));
 }
 
+function generateByeSchedule(players, rounds) {
+  const n = players.length;
+  const indices = players.map(function(_, i) { return i; });
+  // Shuffle
+  for (var i = indices.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+  }
+  var byeList = [];
+  for (var r = 0; r < rounds; r++) {
+    byeList.push(indices[r % n]);
+  }
+  return byeList;
+}
+
 function generateRotating(players, rounds) {
   S.teams = players.map((p, i) => ({ id: i, name: p, players: [p] }));
-  S.schedule = buildRotatingSchedule(players, rounds);
-  S.schedule.forEach(r => r.forEach(m => { S.results[m.id] = { s1: '', s2: '', done: false }; }));
+  var isOdd = players.length % 2 !== 0;
+  var byeSchedule = isOdd ? generateByeSchedule(players, rounds) : [];
+  S.byeSchedule = byeSchedule;
+  var paddedPlayers = isOdd ? [...players, 'BYE'] : players;
+  S.schedule = buildRotatingSchedule(paddedPlayers, rounds);
+  // Mark bye matches
+  if (isOdd) {
+    S.schedule.forEach(function(round, ri) {
+      round.forEach(function(m) {
+        var t1names = (m.t1pair || []).map(function(i) { return paddedPlayers[i]; });
+        var t2names = (m.t2pair || []).map(function(i) { return paddedPlayers[i]; });
+        if (t1names.includes('BYE') || t2names.includes('BYE')) {
+          m.isBye = true;
+          m.byePlayer = t1names.includes('BYE') ? t2names[0] : t1names[0];
+        }
+      });
+    });
+  }
+  S.schedule.forEach(r => r.forEach(m => {
+    if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
+  }));
 }
 
 function buildRRSchedule(ids, rounds) {
@@ -1543,6 +1509,16 @@ function renderSchedule() {
   cont.appendChild(note);
 
   round.forEach(match => {
+    // Handle bye match
+    if (match.isBye) {
+      const byeCard = document.createElement('div');
+      byeCard.className = 'match-card';
+      byeCard.style.opacity = '0.6';
+      byeCard.innerHTML = '<div class="match-header"><span class="match-label">Bye Round</span><span class="pill pill-pend">sitting out</span></div>'
+        + '<div style="text-align:center;padding:12px;color:var(--text-secondary);font-size:14px;">🪑 <strong>' + (match.byePlayer || 'Player') + '</strong> has a bye this round</div>';
+      cont.appendChild(byeCard);
+      return;
+    }
     const res = S.results[match.id] || { s1: '', s2: '', done: false };
     const t1 = getTeamLabel(match, 1), t2 = getTeamLabel(match, 2);
     const winner = getWinner(match.id);
@@ -1630,7 +1606,6 @@ window.copyCodeModal = copyCodeModal;
 window.linkPlayerToUser = linkPlayerToUser;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
-window.loadHomeLeagues = loadHomeLeagues;
 window.showUpgradeModal = showUpgradeModal;
 window.hideUpgradeModal = hideUpgradeModal;
 window.logout = logout;
@@ -1654,7 +1629,7 @@ onAuthStateChanged(auth, async user => {
     clearPlayerInputs();
     await loadUserData();
     await loadGroupsFromFirebase();
-    loadHomeLeagues();
+    loadMyLeagues();
     // Do NOT auto-rejoin — user should explicitly join or create a league
     // This prevents showing other users' leagues on shared devices
   }

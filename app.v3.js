@@ -1399,9 +1399,7 @@ function generateRotating(players, rounds) {
     for (var r = 0; r < rounds; r++) {
       var byeIdx = byeList[r];
       var activePlayers = players.filter(function(_, i) { return i !== byeIdx; });
-      console.log('Round', r, 'bye:', players[byeIdx], 'active:', activePlayers);
       var roundMatches = buildOneRound(activePlayers, r, players);
-      console.log('Round', r, 'matches:', roundMatches.length);
       var byeCard = { id: 'r'+r+'bye', round: r, isBye: true, byePlayer: players[byeIdx], type: 'rotate' };
       schedule.push([byeCard].concat(roundMatches));
     }
@@ -1558,7 +1556,7 @@ function renderSchedule() {
       byeCard.className = 'match-card';
       byeCard.style.opacity = '0.6';
       byeCard.innerHTML = '<div class="match-header"><span class="match-label">Bye Round</span><span class="pill pill-pend">sitting out</span></div>'
-        + '<div style="text-align:center;padding:12px;color:var(--text-secondary);font-size:14px;">🪑 <strong>' + (match.byePlayer || 'Player') + '</strong> has a bye this round</div>';
+        + '<div style="text-align:center;padding:16px;color:#5a5a56;font-size:16px;font-weight:500;">🪑 <span style="color:#1a1a18;font-weight:700;font-size:18px;">' + (match.byePlayer || 'Player') + '</span> has a bye this round</div>';
       cont.appendChild(byeCard);
       return;
     }

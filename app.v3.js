@@ -424,7 +424,14 @@ function calcStandings(state) {
       else { st2.wins++; st2.pts += 2; st1.losses++; }
     }));
     stats.forEach(s => s.diff = s.scored - s.conceded);
-    return stats.sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
+    return stats.sort((a, b) => {
+    // Win % first, then pts diff, then total scored
+    const aWinPct = a.played > 0 ? a.wins / a.played : 0;
+    const bWinPct = b.played > 0 ? b.wins / b.played : 0;
+    if (bWinPct !== aWinPct) return bWinPct - aWinPct;
+    if (b.diff !== a.diff) return b.diff - a.diff;
+    return b.scored - a.scored;
+  });
   } else {
     const stats = {};
     state.players.forEach((p, i) => { stats[i] = { name: p, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0, diff: 0 }; });
@@ -1390,42 +1397,27 @@ function generateByeSchedule(players, rounds) {
 function generateRotating(players, rounds) {
   S.teams = players.map((p, i) => ({ id: i, name: p, players: [p] }));
   var isOdd = players.length % 2 !== 0;
-  var byeList = isOdd ? generateByeSchedule(players, rounds) : [];
-  S.byeSchedule = byeList;
-  S.paddedPlayers = players; // Store original players
-
+  var byeSchedule = isOdd ? generateByeSchedule(players, rounds) : [];
+  S.byeSchedule = byeSchedule;
+  var paddedPlayers = isOdd ? [...players, 'BYE'] : players;
+  S.paddedPlayers = paddedPlayers; // Store for getTeamLabel
+  S.schedule = buildRotatingSchedule(paddedPlayers, rounds);
+  // Mark bye matches
   if (isOdd) {
-    var schedule = [];
-    for (var r = 0; r < rounds; r++) {
-      var byeIdx = byeList[r];
-      var activePlayers = players.filter(function(_, i) { return i !== byeIdx; });
-      var roundMatches = buildOneRound(activePlayers, r, players);
-      var byeCard = { id: 'r'+r+'bye', round: r, isBye: true, byePlayer: players[byeIdx], type: 'rotate' };
-      schedule.push([byeCard].concat(roundMatches));
-    }
-    S.schedule = schedule;
-  } else {
-    S.schedule = buildRotatingSchedule(players, rounds);
-  }
-
-  S.schedule.forEach(function(r) {
-    r.forEach(function(m) {
-      if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
+    S.schedule.forEach(function(round, ri) {
+      round.forEach(function(m) {
+        var t1names = (m.t1pair || []).map(function(i) { return paddedPlayers[i]; });
+        var t2names = (m.t2pair || []).map(function(i) { return paddedPlayers[i]; });
+        if (t1names.includes('BYE') || t2names.includes('BYE')) {
+          m.isBye = true;
+          m.byePlayer = t1names.includes('BYE') ? t2names[0] : t1names[0];
+        }
+      });
     });
-  });
-}
-
-function buildOneRound(activePlayers, roundIdx, allPlayers) {
-  var shuffled = shuffle(activePlayers.slice());
-  var matches = [];
-  for (var i = 0; i + 3 < shuffled.length; i += 4) {
-    var t1 = [shuffled[i], shuffled[i+1]];
-    var t2 = [shuffled[i+2], shuffled[i+3]];
-    var t1pair = t1.map(function(name) { return allPlayers.indexOf(name); });
-    var t2pair = t2.map(function(name) { return allPlayers.indexOf(name); });
-    matches.push({ id: 'r'+roundIdx+'m'+matches.length, round: roundIdx, t1pair: t1pair, t2pair: t2pair, type: 'rotate' });
   }
-  return matches;
+  S.schedule.forEach(r => r.forEach(m => {
+    if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
+  }));
 }
 
 function buildRRSchedule(ids, rounds) {
@@ -1556,7 +1548,7 @@ function renderSchedule() {
       byeCard.className = 'match-card';
       byeCard.style.opacity = '0.6';
       byeCard.innerHTML = '<div class="match-header"><span class="match-label">Bye Round</span><span class="pill pill-pend">sitting out</span></div>'
-        + '<div style="text-align:center;padding:16px;color:#5a5a56;font-size:16px;font-weight:500;">🪑 <span style="color:#1a1a18;font-weight:700;font-size:18px;">' + (match.byePlayer || 'Player') + '</span> has a bye this round</div>';
+        + '<div style="text-align:center;padding:12px;color:var(--text-secondary);font-size:14px;">🪑 <strong>' + (match.byePlayer || 'Player') + '</strong> has a bye this round</div>';
       cont.appendChild(byeCard);
       return;
     }
@@ -1619,7 +1611,7 @@ function renderStandings() {
     + '<div class="card" style="padding:0;overflow:hidden;"><div class="standings-wrap"><table class="stbl">'
     + '<thead><tr><th>#</th><th>' + (isFixed?'Team':'Player') + '</th>' + ph + '<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table></div></div>'
-    + '<p class="tiebreak-note">Tiebreakers: league points → score diff → total scored</p>';
+    + '<p class="tiebreak-note">Tiebreakers: win % → score diff → total scored</p>';
 }
 
 // ── Expose globals ────────────────────────────────────────────────────────────

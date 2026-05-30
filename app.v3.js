@@ -132,15 +132,10 @@ function setSyncStatus(s) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function loginWithGoogle() {
   try {
-    // Use redirect on mobile, popup on desktop
-    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-      await signInWithRedirect(auth, provider);
-    } else {
-      const result = await signInWithPopup(auth, provider);
-      if (result?.user) {
-        currentUser = result.user;
-        await saveUserProfile(currentUser);
-      }
+    const result = await signInWithPopup(auth, provider);
+    if (result?.user) {
+      currentUser = result.user;
+      await saveUserProfile(currentUser);
     }
   } catch (e) {
     if (e.code !== 'auth/popup-closed-by-user') {

@@ -1413,9 +1413,13 @@ function generateRotating(players, rounds) {
     var sitting = [];
 
     if (sittingCount > 0) {
+      // Sort ascending by byeCount so players with LEAST byes sit out first
       var scores = [];
-      for (var i = 0; i < n; i++) scores.push({ idx: i, score: byeCount[i] * 1000 - playCount[i] });
-      scores.sort(function(a, b) { return b.score - a.score; });
+      for (var i = 0; i < n; i++) scores.push({ idx: i, byes: byeCount[i], plays: playCount[i] });
+      scores.sort(function(a, b) {
+        if (a.byes !== b.byes) return a.byes - b.byes; // least byes sit out first
+        return b.plays - a.plays; // most plays sit out if tied
+      });
       for (var k = 0; k < sittingCount; k++) {
         sitting.push(scores[k].idx);
         byeCount[scores[k].idx]++;
@@ -1425,9 +1429,11 @@ function generateRotating(players, rounds) {
     var playing = [];
     for (var i = 0; i < n; i++) { if (sitting.indexOf(i) === -1) playing.push(i); }
 
-    sitting.forEach(function(idx) {
-      roundMatches.push({ id: 'r'+r+'bye'+idx, round: r, isBye: true, byePlayer: players[idx], type: 'rotate' });
-    });
+    // Combined bye card showing all sitting players
+    if (sitting.length > 0) {
+      var byeNames = sitting.map(function(idx) { return players[idx]; });
+      roundMatches.push({ id: 'r'+r+'bye', round: r, isBye: true, byePlayer: byeNames.join(', '), type: 'rotate' });
+    }
 
     var pairs = findBestPairs(playing, partnerCount);
     pairs.forEach(function(pair, mi) {
@@ -1449,8 +1455,6 @@ function generateRotating(players, rounds) {
     });
   });
 }
-
-
 
 function buildRRSchedule(ids, rounds) {
   const schedule = [], history = new Set();
@@ -1579,8 +1583,12 @@ function renderSchedule() {
       const byeCard = document.createElement('div');
       byeCard.className = 'match-card';
       byeCard.style.opacity = '0.6';
-      byeCard.innerHTML = '<div class="match-header"><span class="match-label">Bye Round</span><span class="pill pill-pend">sitting out</span></div>'
-        + '<div style="text-align:center;padding:12px;color:var(--text-secondary);font-size:14px;">🪑 <strong>' + (match.byePlayer || 'Player') + '</strong> has a bye this round</div>';
+      var byeNames = (match.byePlayer || 'Player').split(', ');
+      var byeText = byeNames.length === 1
+        ? byeNames[0] + ' has a bye this round'
+        : byeNames.slice(0, -1).join(', ') + ' & ' + byeNames[byeNames.length-1] + ' have a bye this round';
+      byeCard.innerHTML = '<div class="match-header"><span class="match-label">Sitting Out</span><span class="pill pill-pend">' + byeNames.length + ' players</span></div>'
+        + '<div style="text-align:center;padding:14px;color:#1a1a18;font-size:15px;font-weight:500;">🪑 ' + byeText + '</div>';
       cont.appendChild(byeCard);
       return;
     }

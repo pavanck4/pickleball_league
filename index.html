@@ -370,12 +370,10 @@
 </script>
 <script src="config.js" onerror="console.warn('config.js not found')"></script>
 <script>
-  // Register service worker for PWA
+  // Unregister any existing service workers to fix auth redirect issues
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('SW registered'))
-        .catch(err => console.log('SW error:', err));
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
     });
   }
 </script>

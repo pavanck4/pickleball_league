@@ -1,27 +1,13 @@
-// CourtIQ Service Worker
-const CACHE_NAME = 'courtiq-v1';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.v3.js',
-  '/config.js',
-  'https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap'
-];
+const CACHE_NAME = 'courtiq-v2';
+const ASSETS = ['/', '/index.html', '/style.css', '/app.v3.js', '/manifest.json'];
 
-// Install — cache core assets
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS).catch(err => {
-        console.log('Cache addAll error:', err);
-      });
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS).catch(() => {}))
   );
   self.skipWaiting();
 });
 
-// Activate — clean old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -31,27 +17,25 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch — network first, fallback to cache
 self.addEventListener('fetch', event => {
-  // Skip Firebase and non-GET requests
   if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('firestore') || 
-      event.request.url.includes('firebase') ||
-      event.request.url.includes('googleapis')) return;
+  
+  // Never intercept Firebase auth requests
+  const url = event.request.url;
+  if (url.includes('firestore') || 
+      url.includes('firebase') || 
+      url.includes('googleapis') ||
+      url.includes('gstatic') ||
+      url.includes('accounts.google') ||
+      url.includes('/__/auth/')) return;
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Cache fresh responses
         const clone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
       })
-      .catch(() => {
-        // Fallback to cache when offline
-        return caches.match(event.request).then(cached => {
-          return cached || caches.match('/index.html');
-        });
-      })
+      .catch(() => caches.match(event.request).then(r => r || caches.match('/index.html')))
   );
 });

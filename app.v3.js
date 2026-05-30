@@ -38,10 +38,6 @@ function isPro() {
   return false;
 }
 
-function /* upgrade removed */ {
-  const modal = document.getElementById('upgrade-modal');
-  if (modal) modal.style.display = 'flex';
-}
 
 function hideUpgradeModal() {
   const modal = document.getElementById('upgrade-modal');

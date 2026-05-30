@@ -38,7 +38,7 @@ function isPro() {
   return false;
 }
 
-function showUpgradeModal() {
+function /* upgrade removed */ {
   const modal = document.getElementById('upgrade-modal');
   if (modal) modal.style.display = 'flex';
 }
@@ -1200,7 +1200,7 @@ function refreshPlayerInputs(preload) {
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
   // Show upgrade hint if over free limit
   const hint = document.getElementById('player-limit-hint');
-  if (hint) hint.style.display = (!isPro() && n > FREE_PLAYER_LIMIT) ? '' : 'none';
+  if (hint) hint.style.display = 'none';
   const cont = document.getElementById('player-inputs');
   if (!cont) return;
   const existing = preload || Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
@@ -1311,11 +1311,7 @@ async function generateLeague() {
   if (S.mode === 'rotate' && n < 3) { errEl.textContent = 'Need at least 3 players for rotating mode.'; return; }
   if (rounds < 1) { errEl.textContent = 'Need at least 1 round.'; return; }
 
-  // Free tier limit
-  if (!isPro() && n > FREE_PLAYER_LIMIT) {
-    showUpgradeModal();
-    return;
-  }
+
   const players = [];
   for (let i = 0; i < n; i++) players.push((document.getElementById('pi' + i)?.value || '').trim() || 'Player ' + (i + 1));
   S.players = players; S.rounds = rounds; S.results = {};

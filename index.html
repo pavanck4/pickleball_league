@@ -100,19 +100,6 @@
   </div>
 </div>
 
-<!-- UPGRADE MODAL -->
-<div id="upgrade-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
-  <div style="background:#fff;border-radius:20px;padding:2rem;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-    <div style="font-size:48px;margin-bottom:12px;">⭐</div>
-    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;margin-bottom:8px;">Upgrade to Pro</h2>
-    <p style="font-size:14px;color:#5a5a56;margin-bottom:1.5rem;line-height:1.6;">You've reached the <strong>8 player limit</strong> on the free plan.</p>
-    <div style="background:#f4f3ef;border-radius:12px;padding:1rem;margin-bottom:1.5rem;">
-      <div style="font-size:32px;font-weight:600;color:#1a1a18;font-family:'DM Serif Display',serif;">$3<span style="font-size:16px;font-weight:400;color:#5a5a56;">/month</span></div>
-    </div>
-    <button onclick="hideUpgradeModal()" style="width:100%;padding:10px;background:transparent;border:0.5px solid #ccc;border-radius:10px;font-size:14px;color:#5a5a56;cursor:pointer;font-family:'DM Sans',sans-serif;">Maybe later</button>
-  </div>
-</div>
-
 <!-- MAIN APP -->
 <div id="main-app" style="display:none;">
 
@@ -137,7 +124,7 @@
       </div>
       <div class="header-right">
         <span class="sync-status" id="sync-status"></span>
-        <span class="plan-badge" id="plan-badge" style="display:none;">Free</span>
+
         <button class="btn-danger" id="reset-btn" onclick="confirmReset()" style="display:none;">Reset</button>
         <button class="auth-btn" id="auth-btn" onclick="loginWithGoogle()">Sign in</button>
       </div>
@@ -262,9 +249,7 @@
           <div>
             <label class="field-label">Number of players</label>
             <input type="number" id="inp-n" min="3" max="20" step="1" value="6" oninput="refreshPlayerInputs()">
-            <div id="player-limit-hint" style="font-size:12px;color:#633806;margin-top:4px;display:none;">
-              Free plan: max 8 players. <span style="color:#1D9E75;cursor:pointer;text-decoration:underline;" onclick="showUpgradeModal()">Upgrade to Pro →</span>
-            </div>
+
           </div>
           <div>
             <label class="field-label">Number of rounds</label>

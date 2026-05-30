@@ -1695,6 +1695,7 @@ getRedirectResult(auth).then(async result => {
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
+  currentUserData = null; // Clear cached profile on user change
   renderAuthUI(user);
   if (user) {
     clearPlayerInputs();

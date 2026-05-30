@@ -1,4 +1,14 @@
 {
-  "buildCommand": "echo \"window.__env = { FIREBASE_API_KEY: '${FIREBASE_API_KEY}' };\" > config.js",
-  "outputDirectory": "."
+  "buildCommand": "echo \"window.__env = { FIREBASE_API_KEY: '$FIREBASE_API_KEY' };\" > config.js",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        }
+      ]
+    }
+  ]
 }

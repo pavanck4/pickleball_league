@@ -132,9 +132,20 @@ function setSyncStatus(s) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function loginWithGoogle() {
   try {
-    await signInWithRedirect(auth, provider);
+    // Use redirect on mobile, popup on desktop
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      await signInWithRedirect(auth, provider);
+    } else {
+      const result = await signInWithPopup(auth, provider);
+      if (result?.user) {
+        currentUser = result.user;
+        await saveUserProfile(currentUser);
+      }
+    }
   } catch (e) {
-    showToast('Login failed — ' + e.message, 'error');
+    if (e.code !== 'auth/popup-closed-by-user') {
+      showToast('Login failed — ' + e.message, 'error');
+    }
     console.error(e);
   }
 }

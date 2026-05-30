@@ -132,10 +132,7 @@ function setSyncStatus(s) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function loginWithGoogle() {
   try {
-    const result = await signInWithPopup(auth, provider);
-    currentUser = result.user;
-    await saveUserProfile(currentUser);
-    showToast('Welcome ' + currentUser.displayName + '!');
+    await signInWithRedirect(auth, provider);
   } catch (e) {
     showToast('Login failed — ' + e.message, 'error');
     console.error(e);

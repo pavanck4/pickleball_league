@@ -424,14 +424,7 @@ function calcStandings(state) {
       else { st2.wins++; st2.pts += 2; st1.losses++; }
     }));
     stats.forEach(s => s.diff = s.scored - s.conceded);
-    return stats.sort((a, b) => {
-    // Win % first, then pts diff, then total scored
-    const aWinPct = a.played > 0 ? a.wins / a.played : 0;
-    const bWinPct = b.played > 0 ? b.wins / b.played : 0;
-    if (bWinPct !== aWinPct) return bWinPct - aWinPct;
-    if (b.diff !== a.diff) return b.diff - a.diff;
-    return b.scored - a.scored;
-  });
+    return stats.sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.scored - a.scored);
   } else {
     const stats = {};
     state.players.forEach((p, i) => { stats[i] = { name: p, wins: 0, losses: 0, pts: 0, scored: 0, conceded: 0, played: 0, diff: 0 }; });
@@ -1205,9 +1198,6 @@ function refreshPlayerInputs(preload) {
   n = Math.max(3, Math.min(20, n));
   // Fixed mode needs even numbers (teams of 2), rotating allows odd
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
-  // Set rounds = number of players by default (user can adjust)
-  const roundsEl = document.getElementById('inp-r');
-  if (roundsEl && !preload) roundsEl.value = n;
   // Show upgrade hint if over free limit
   const hint = document.getElementById('player-limit-hint');
   if (hint) hint.style.display = (!isPro() && n > FREE_PLAYER_LIMIT) ? '' : 'none';
@@ -1382,46 +1372,85 @@ function generateFixed(players, rounds) {
   S.schedule.forEach(r => r.forEach(m => { S.results[m.id] = { s1: '', s2: '', done: false }; }));
 }
 
-function generateByeSchedule(players, rounds) {
-  const n = players.length;
-  const indices = players.map(function(_, i) { return i; });
-  // Shuffle
-  for (var i = indices.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+function findBestPairs(playingIndices, partnerCount) {
+  var bestScore = Infinity;
+  var bestMatches = [];
+  for (var attempt = 0; attempt < 100; attempt++) {
+    var shuffled = playingIndices.slice();
+    for (var i = shuffled.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+    }
+    var matches = [];
+    var score = 0;
+    for (var k = 0; k + 3 < shuffled.length; k += 4) {
+      var a = shuffled[k], b = shuffled[k+1], c = shuffled[k+2], d = shuffled[k+3];
+      score += partnerCount[a][b] + partnerCount[c][d];
+      matches.push({ t1: [a,b], t2: [c,d] });
+    }
+    if (score < bestScore) { bestScore = score; bestMatches = matches; }
+    if (bestScore === 0) break;
   }
-  var byeList = [];
-  for (var r = 0; r < rounds; r++) {
-    byeList.push(indices[r % n]);
-  }
-  return byeList;
+  return bestMatches;
 }
 
 function generateRotating(players, rounds) {
   S.teams = players.map((p, i) => ({ id: i, name: p, players: [p] }));
-  var isOdd = players.length % 2 !== 0;
-  var byeSchedule = isOdd ? generateByeSchedule(players, rounds) : [];
-  S.byeSchedule = byeSchedule;
-  var paddedPlayers = isOdd ? [...players, 'BYE'] : players;
-  S.paddedPlayers = paddedPlayers; // Store for getTeamLabel
-  S.schedule = buildRotatingSchedule(paddedPlayers, rounds);
-  // Mark bye matches
-  if (isOdd) {
-    S.schedule.forEach(function(round, ri) {
-      round.forEach(function(m) {
-        var t1names = (m.t1pair || []).map(function(i) { return paddedPlayers[i]; });
-        var t2names = (m.t2pair || []).map(function(i) { return paddedPlayers[i]; });
-        if (t1names.includes('BYE') || t2names.includes('BYE')) {
-          m.isBye = true;
-          m.byePlayer = t1names.includes('BYE') ? t2names[0] : t1names[0];
-        }
-      });
+  S.paddedPlayers = players;
+  var n = players.length;
+  var courts = Math.floor(n / 4);
+  var playingCount = courts * 4;
+  var sittingCount = n - playingCount;
+
+  var partnerCount = [];
+  for (var i = 0; i < n; i++) partnerCount.push(new Array(n).fill(0));
+  var byeCount = new Array(n).fill(0);
+  var playCount = new Array(n).fill(0);
+
+  var schedule = [];
+  for (var r = 0; r < rounds; r++) {
+    var roundMatches = [];
+    var sitting = [];
+
+    if (sittingCount > 0) {
+      var scores = [];
+      for (var i = 0; i < n; i++) scores.push({ idx: i, score: byeCount[i] * 1000 - playCount[i] });
+      scores.sort(function(a, b) { return b.score - a.score; });
+      for (var k = 0; k < sittingCount; k++) {
+        sitting.push(scores[k].idx);
+        byeCount[scores[k].idx]++;
+      }
+    }
+
+    var playing = [];
+    for (var i = 0; i < n; i++) { if (sitting.indexOf(i) === -1) playing.push(i); }
+
+    sitting.forEach(function(idx) {
+      roundMatches.push({ id: 'r'+r+'bye'+idx, round: r, isBye: true, byePlayer: players[idx], type: 'rotate' });
     });
+
+    var pairs = findBestPairs(playing, partnerCount);
+    pairs.forEach(function(pair, mi) {
+      var a = pair.t1[0], b = pair.t1[1], c = pair.t2[0], d = pair.t2[1];
+      partnerCount[a][b]++; partnerCount[b][a]++;
+      partnerCount[c][d]++; partnerCount[d][c]++;
+      playCount[a]++; playCount[b]++; playCount[c]++; playCount[d]++;
+      roundMatches.push({ id: 'r'+r+'m'+mi, round: r, t1pair: pair.t1, t2pair: pair.t2, type: 'rotate' });
+    });
+
+    schedule.push(roundMatches);
   }
-  S.schedule.forEach(r => r.forEach(m => {
-    if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
-  }));
+
+  S.schedule = schedule;
+  S.byeSchedule = [];
+  S.schedule.forEach(function(r) {
+    r.forEach(function(m) {
+      if (!m.isBye) S.results[m.id] = { s1: '', s2: '', done: false };
+    });
+  });
 }
+
+
 
 function buildRRSchedule(ids, rounds) {
   const schedule = [], history = new Set();
@@ -1614,7 +1643,7 @@ function renderStandings() {
     + '<div class="card" style="padding:0;overflow:hidden;"><div class="standings-wrap"><table class="stbl">'
     + '<thead><tr><th>#</th><th>' + (isFixed?'Team':'Player') + '</th>' + ph + '<th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/-</th><th>Scored</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table></div></div>'
-    + '<p class="tiebreak-note">Tiebreakers: win % → score diff → total scored</p>';
+    + '<p class="tiebreak-note">Tiebreakers: league points → score diff → total scored</p>';
 }
 
 // ── Expose globals ────────────────────────────────────────────────────────────

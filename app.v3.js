@@ -1678,12 +1678,14 @@ function generateRotating(players, rounds) {
     var sitting = [];
 
     if (sittingCount > 0) {
-      // Sort ascending by byeCount so players with LEAST byes sit out first
+      // Sort by byeCount ascending, then playCount descending, then random tiebreak
+      // The random tiebreak prevents the same players sitting out every N rounds
       var scores = [];
-      for (var i = 0; i < n; i++) scores.push({ idx: i, byes: byeCount[i], plays: playCount[i] });
+      for (var i = 0; i < n; i++) scores.push({ idx: i, byes: byeCount[i], plays: playCount[i], rand: Math.random() });
       scores.sort(function(a, b) {
-        if (a.byes !== b.byes) return a.byes - b.byes; // least byes sit out first
-        return b.plays - a.plays; // most plays sit out if tied
+        if (a.byes !== b.byes) return a.byes - b.byes;   // fewest byes sits out first
+        if (a.plays !== b.plays) return b.plays - a.plays; // most plays sits out if tied
+        return a.rand - b.rand;                            // random final tiebreak
       });
       for (var k = 0; k < sittingCount; k++) {
         sitting.push(scores[k].idx);

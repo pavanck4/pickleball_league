@@ -1282,7 +1282,7 @@ function clearPlayerInputs() {
     const row = document.createElement('div');
     row.className = 'player-row';
     const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
-    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" id="pi' + i + '">' + lbl;
+    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" id="pi' + i + '">' + lbl + '<button class="btn-delete-player" onclick="deletePlayerRow(this)" title="Remove player">✕</button>';
     cont.appendChild(row);
   }
 }

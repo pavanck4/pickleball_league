@@ -1195,22 +1195,80 @@ S.mode = 'rotate';
 function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
   n = Math.max(3, Math.min(20, n));
-  // Fixed mode needs even numbers (teams of 2), rotating allows odd
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
-  // Show upgrade hint if over free limit
+  document.getElementById('inp-n').value = n;
   const hint = document.getElementById('player-limit-hint');
   if (hint) hint.style.display = 'none';
   const cont = document.getElementById('player-inputs');
   if (!cont) return;
+  // Preserve existing names
   const existing = preload || Array.from(cont.querySelectorAll('input[type=text]')).map(i => i.value);
+  renderPlayerRows(existing, n);
+}
+
+function renderPlayerRows(existing, n) {
+  const cont = document.getElementById('player-inputs');
+  if (!cont) return;
   cont.innerHTML = '';
   for (let i = 0; i < n; i++) {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
-    row.innerHTML = '<span class="player-num">' + (i + 1) + '</span><input type="text" placeholder="Player ' + (i + 1) + '" value="' + (existing[i] || '') + '" id="pi' + i + '">' + lbl;
-    cont.appendChild(row);
+    addPlayerRow(i, existing[i] || '');
   }
+  updatePlayerNumbers();
+}
+
+function addPlayerRow(idx, value) {
+  const cont = document.getElementById('player-inputs');
+  if (!cont) return;
+  const currentCount = cont.querySelectorAll('.player-row').length;
+  const i = idx !== undefined ? idx : currentCount;
+  const row = document.createElement('div');
+  row.className = 'player-row';
+  const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
+  row.innerHTML = '<span class="player-num">' + (i + 1) + '</span>'
+    + '<input type="text" placeholder="Player ' + (i + 1) + '" value="' + (value || '') + '" id="pi' + i + '">'
+    + lbl
+    + '<button class="btn-delete-player" onclick="deletePlayerRow(this)" title="Remove player">✕</button>';
+  cont.appendChild(row);
+  // Update player count input
+  const total = cont.querySelectorAll('.player-row').length;
+  const inp = document.getElementById('inp-n');
+  if (inp) inp.value = total;
+}
+
+function deletePlayerRow(btn) {
+  const cont = document.getElementById('player-inputs');
+  const rows = cont.querySelectorAll('.player-row');
+  if (rows.length <= 3) { showToast('Minimum 3 players required', 'error'); return; }
+  btn.closest('.player-row').remove();
+  updatePlayerNumbers();
+  const inp = document.getElementById('inp-n');
+  if (inp) inp.value = cont.querySelectorAll('.player-row').length;
+}
+
+function updatePlayerNumbers() {
+  const cont = document.getElementById('player-inputs');
+  if (!cont) return;
+  const rows = cont.querySelectorAll('.player-row');
+  rows.forEach((row, i) => {
+    const num = row.querySelector('.player-num');
+    const input = row.querySelector('input[type=text]');
+    const lbl = row.querySelector('.team-label');
+    if (num) num.textContent = i + 1;
+    if (input) { input.id = 'pi' + i; input.placeholder = 'Player ' + (i + 1); }
+    if (lbl && S.mode === 'fixed') lbl.textContent = 'Team ' + (Math.floor(i / 2) + 1);
+  });
+}
+
+function addNewPlayer() {
+  const cont = document.getElementById('player-inputs');
+  const currentCount = cont.querySelectorAll('.player-row').length;
+  if (currentCount >= 20) { showToast('Maximum 20 players allowed', 'error'); return; }
+  addPlayerRow(currentCount, '');
+  // Focus new input
+  setTimeout(() => {
+    const inp = document.getElementById('pi' + currentCount);
+    if (inp) inp.focus();
+  }, 50);
 }
 
 function clearPlayerInputs() {
@@ -1674,6 +1732,8 @@ window.copyCodeModal = copyCodeModal;
 window.linkPlayerToUser = linkPlayerToUser;
 window.quickJoin = quickJoin;
 window.loadMyLeagues = loadMyLeagues;
+window.addNewPlayer = addNewPlayer;
+window.deletePlayerRow = deletePlayerRow;
 window.logout = logout;
 window.renderUsers = renderUsers;
 window.S = S;
@@ -1703,5 +1763,3 @@ onAuthStateChanged(auth, async user => {
 });
 // CourtIQ v6 - Thu May  7 07:03:22 CDT 2026
 // Fri May  8 16:35:05 CDT 2026
-// build 1780258157
-// deploy 1780258735

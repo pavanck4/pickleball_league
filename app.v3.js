@@ -1,6 +1,6 @@
 // CourtIQ v5 — Google Auth + Player Profiles + Personal Schedule
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, collection, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp as rtServerTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
@@ -937,87 +937,246 @@ function renderMySchedule() {
 }
 
 // ── Firebase: Groups ──────────────────────────────────────────────────────────
+// Groups are stored per-user at users/{uid}/groups/{groupId}
+// Shared groups (added via email) are loaded by querying for current user's email in memberEmails
+
+let groupModalEditId = null; // null = new, string = editing existing group id
+
 async function loadGroupsFromFirebase() {
+  if (!currentUser) return;
+  cachedGroups = [];
   try {
-    const local = JSON.parse(localStorage.getItem('courtiq_groups') || '[]');
-    if (Array.isArray(local) && local.length) { cachedGroups = local; renderGroups(); }
-  } catch (e) {}
-  try {
-    const snap = await getDoc(doc(db, 'groups', 'shared'));
-    if (snap.exists() && Array.isArray(snap.data().list)) {
-      cachedGroups = snap.data().list;
-      localStorage.setItem('courtiq_groups', JSON.stringify(cachedGroups));
-    }
-  } catch (e) { console.error('Groups load error:', e); }
-  renderGroups();
-}
+    // 1. Groups I own
+    const mySnap = await getDocs(collection(db, 'users', currentUser.uid, 'groups'));
+    mySnap.forEach(d => {
+      cachedGroups.push({ ...d.data(), _id: d.id, _owned: true });
+    });
 
-async function saveGroups(groups) {
-  cachedGroups = groups;
-  localStorage.setItem('courtiq_groups', JSON.stringify(groups));
-  try {
-    await setDoc(doc(db, 'groups', 'shared'), { list: groups, updatedAt: serverTimestamp() });
-    return true;
-  } catch (e) { console.error('Groups save error:', e); return false; }
-}
+    // 2. Groups shared with me (other users who listed my email)
+    const sharedSnap = await getDocs(
+      query(collection(db, 'sharedGroups'), where('memberEmails', 'array-contains', currentUser.email))
+    );
+    sharedSnap.forEach(d => {
+      const data = d.data();
+      // Don't duplicate if I own it somehow
+      if (!cachedGroups.find(g => g._id === d.id)) {
+        cachedGroups.push({ ...data, _id: d.id, _owned: false });
+      }
+    });
 
-async function saveCurrentAsGroup(editIdx) {
-  const n = parseInt(document.getElementById('inp-n').value) || 6;
-  const players = [];
-  for (let i = 0; i < n; i++) {
-    const v = (document.getElementById('pi' + i)?.value || '').trim();
-    if (v) players.push(v);
+    cachedGroups.sort((a, b) => (b.savedAt || '') > (a.savedAt || '') ? 1 : -1);
+  } catch (e) {
+    console.error('Groups load error:', e);
   }
-  if (players.length < 4) { showToast('Enter at least 4 player names first', 'error'); return; }
-  const def = editIdx !== undefined ? cachedGroups[editIdx]?.name || '' : '';
-  const name = prompt(editIdx !== undefined ? 'Rename group:' : 'Name this group:', def);
-  if (!name?.trim()) return;
-  const groups = [...cachedGroups];
-  const entry = { name: name.trim(), players, savedAt: new Date().toISOString() };
-  if (editIdx !== undefined) groups[editIdx] = entry;
-  else groups.unshift(entry);
-  const ok = await saveGroups(groups.slice(0, 10));
   renderGroups();
-  showToast(ok ? '✓ Group saved & synced!' : 'Saved locally only', ok ? 'success' : 'error');
 }
 
-function loadGroup(idx) {
-  const g = cachedGroups[idx];
+async function saveGroupToFirebase(groupData, editId) {
+  if (!currentUser) return null;
+  try {
+    const groupsRef = collection(db, 'users', currentUser.uid, 'groups');
+    let docId = editId;
+    if (!docId) {
+      // Generate id from name + timestamp
+      docId = groupData.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+    }
+    const ref = doc(db, 'users', currentUser.uid, 'groups', docId);
+    await setDoc(ref, { ...groupData, updatedAt: serverTimestamp() }, { merge: true });
+
+    // If there are memberEmails, also save to sharedGroups collection so others can find it
+    if (groupData.memberEmails && groupData.memberEmails.length > 0) {
+      await setDoc(doc(db, 'sharedGroups', docId), {
+        ...groupData,
+        ownerUid: currentUser.uid,
+        ownerEmail: currentUser.email,
+        ownerName: currentUser.displayName,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } else {
+      // Remove from sharedGroups if no members (cleanup)
+      try {
+        const existing = await getDoc(doc(db, 'sharedGroups', docId));
+        if (existing.exists() && existing.data().ownerUid === currentUser.uid) {
+          await setDoc(doc(db, 'sharedGroups', docId), { memberEmails: [] }, { merge: true });
+        }
+      } catch(e) {}
+    }
+
+    return docId;
+  } catch (e) {
+    console.error('Group save error:', e);
+    return null;
+  }
+}
+
+function showCreateGroupModal() {
+  groupModalEditId = null;
+  const titleEl = document.getElementById('group-modal-title');
+  const nameEl = document.getElementById('group-modal-name');
+  const emailsEl = document.getElementById('group-modal-emails');
+  const errEl = document.getElementById('group-modal-err');
+  if (titleEl) titleEl.textContent = 'Create a group';
+  if (nameEl) nameEl.value = '';
+  if (emailsEl) emailsEl.value = '';
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+  const modal = document.getElementById('group-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function showEditGroupModal(groupId) {
+  const g = cachedGroups.find(g => g._id === groupId);
   if (!g) return;
-  const n = g.players.length % 2 === 0 ? g.players.length : g.players.length + 1;
+  groupModalEditId = groupId;
+  const titleEl = document.getElementById('group-modal-title');
+  const nameEl = document.getElementById('group-modal-name');
+  const emailsEl = document.getElementById('group-modal-emails');
+  const errEl = document.getElementById('group-modal-err');
+  if (titleEl) titleEl.textContent = 'Edit group';
+  if (nameEl) nameEl.value = g.name || '';
+  if (emailsEl) emailsEl.value = (g.memberEmails || []).join('\n');
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+  const modal = document.getElementById('group-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function hideGroupModal() {
+  const modal = document.getElementById('group-modal');
+  if (modal) modal.style.display = 'none';
+  groupModalEditId = null;
+}
+
+async function confirmSaveGroup() {
+  const nameEl = document.getElementById('group-modal-name');
+  const emailsEl = document.getElementById('group-modal-emails');
+  const errEl = document.getElementById('group-modal-err');
+  const name = nameEl?.value.trim();
+  if (!name) {
+    if (errEl) { errEl.textContent = 'Please enter a group name.'; errEl.style.display = ''; }
+    return;
+  }
+
+  // Collect current player names from inputs
+  const cont = document.getElementById('player-inputs');
+  const players = Array.from(cont?.querySelectorAll('input[type=text]') || [])
+    .map(i => i.value.trim()).filter(Boolean);
+  if (players.length < 2) {
+    if (errEl) { errEl.textContent = 'Enter at least 2 player names first.'; errEl.style.display = ''; }
+    return;
+  }
+
+  // Parse emails
+  const rawEmails = emailsEl?.value || '';
+  const memberEmails = rawEmails.split(/[\n,]+/).map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
+
+  const groupData = {
+    name,
+    players,
+    memberEmails,
+    savedAt: new Date().toISOString()
+  };
+
+  const saveBtn = document.querySelector('#group-modal button[onclick="confirmSaveGroup()"]');
+  if (saveBtn) saveBtn.textContent = 'Saving…';
+
+  const docId = await saveGroupToFirebase(groupData, groupModalEditId);
+  if (saveBtn) saveBtn.textContent = 'Save group';
+
+  if (docId) {
+    hideGroupModal();
+    await loadGroupsFromFirebase();
+    showToast('✓ Group saved!');
+  } else {
+    if (errEl) { errEl.textContent = 'Could not save. Try again.'; errEl.style.display = ''; }
+  }
+}
+
+function loadGroup(groupId) {
+  const g = cachedGroups.find(g => g._id === groupId);
+  if (!g) return;
+  let n = g.players.length;
+  if (S.mode === 'fixed' && n % 2 !== 0) n++;
   document.getElementById('inp-n').value = n;
   refreshPlayerInputs(g.players);
   showToast('Loaded: ' + g.name, 'link');
 }
 
-async function deleteGroup(idx) {
-  if (!confirm('Delete group "' + (cachedGroups[idx]?.name) + '"?')) return;
-  const groups = [...cachedGroups];
-  groups.splice(idx, 1);
-  await saveGroups(groups);
-  renderGroups();
+async function deleteGroup(groupId) {
+  const g = cachedGroups.find(g => g._id === groupId);
+  if (!g || !g._owned) { showToast('You can only delete groups you created', 'error'); return; }
+  if (!confirm('Delete group "' + g.name + '"?')) return;
+  try {
+    await deleteDoc(doc(db, 'users', currentUser.uid, 'groups', groupId));
+    try { await deleteDoc(doc(db, 'sharedGroups', groupId)); } catch(e) {}
+  } catch(e) {
+    console.error('Delete group error:', e);
+    showToast('Could not delete group', 'error');
+    return;
+  }
+  await loadGroupsFromFirebase();
   showToast('Group deleted');
 }
 
-function editGroup(idx) { saveCurrentAsGroup(idx); }
-
 function renderGroups() {
-  const wrap = document.getElementById('groups-wrap');
-  const chips = document.getElementById('groups-chips');
-  if (!wrap || !chips) return;
-  if (!cachedGroups.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = '';
-  chips.innerHTML = cachedGroups.map((g, i) =>
-    '<div class="group-chip">'
-    + '<button class="group-chip-load" onclick="loadGroup(' + i + ')">'
-    + '<span class="group-chip-name">' + g.name + '</span>'
-    + '<span class="group-chip-count">' + g.players.length + ' players</span>'
-    + '</button>'
-    + '<div class="group-chip-actions">'
-    + '<button class="group-action-btn edit" onclick="editGroup(' + i + ')" title="Edit">✏️</button>'
-    + '<button class="group-action-btn delete" onclick="deleteGroup(' + i + ')" title="Delete">✕</button>'
-    + '</div></div>'
-  ).join('');
+  const list = document.getElementById('groups-list');
+  const empty = document.getElementById('groups-empty');
+  if (!list) return;
+
+  if (!cachedGroups.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  list.innerHTML = '';
+  cachedGroups.forEach(g => {
+    const card = document.createElement('div');
+    card.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color 0.15s;';
+    card.onmouseenter = () => card.style.borderColor = '#1D9E75';
+    card.onmouseleave = () => card.style.borderColor = 'var(--border)';
+
+    const left = document.createElement('div');
+    left.style.cssText = 'flex:1;min-width:0;';
+    const sharedBadge = !g._owned
+      ? '<span style="font-size:10px;background:#e8f4ff;color:#185FA5;border-radius:4px;padding:1px 6px;font-weight:500;margin-left:6px;">shared</span>'
+      : '';
+    left.innerHTML = '<div style="font-size:14px;font-weight:500;">' + g.name + sharedBadge + '</div>'
+      + '<div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">' + g.players.length + ' players'
+      + (g.memberEmails?.length ? ' · ' + g.memberEmails.length + ' shared' : '')
+      + (g._owned ? '' : ' · by ' + (g.ownerName || g.ownerEmail || 'teammate'))
+      + '</div>';
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+
+    const loadBtn = document.createElement('button');
+    loadBtn.textContent = 'Load';
+    loadBtn.style.cssText = 'padding:6px 14px;background:#1D9E75;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;';
+    loadBtn.addEventListener('click', (e) => { e.stopPropagation(); loadGroup(g._id); });
+
+    actions.appendChild(loadBtn);
+
+    if (g._owned) {
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✏️';
+      editBtn.title = 'Edit';
+      editBtn.style.cssText = 'padding:6px 10px;background:transparent;border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;';
+      editBtn.addEventListener('click', (e) => { e.stopPropagation(); showEditGroupModal(g._id); });
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete';
+      delBtn.style.cssText = 'padding:6px 10px;background:transparent;border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;color:#c0392b;';
+      delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteGroup(g._id); });
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+    }
+
+    card.appendChild(left);
+    card.appendChild(actions);
+    list.appendChild(card);
+  });
 }
 
 // ── My Leagues ────────────────────────────────────────────────────────────────
@@ -1719,10 +1878,13 @@ window.confirmReset = confirmReset;
 window.copyCode = copyCode;
 window.shareWhatsApp = shareWhatsApp;
 window.forceSaveHistory = forceSaveHistory;
-window.saveCurrentAsGroup = saveCurrentAsGroup;
+window.saveCurrentAsGroup = saveGroupToFirebase; // legacy alias, kept for safety
 window.loadGroup = loadGroup;
 window.deleteGroup = deleteGroup;
-window.editGroup = editGroup;
+window.showEditGroupModal = showEditGroupModal;
+window.showCreateGroupModal = showCreateGroupModal;
+window.hideGroupModal = hideGroupModal;
+window.confirmSaveGroup = confirmSaveGroup;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
 window.hidePlayerSelectModal = hidePlayerSelectModal;

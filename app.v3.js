@@ -1009,39 +1009,80 @@ async function saveGroupToFirebase(groupData, editId) {
   }
 }
 
+function renderGroupModalPlayers(players) {
+  const cont = document.getElementById('group-modal-players');
+  if (!cont) return;
+  cont.innerHTML = '';
+  (players || ['']).forEach((val, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    row.innerHTML = '<span style="font-size:12px;color:var(--text-tertiary);width:16px;text-align:right;flex-shrink:0;">' + (i + 1) + '</span>'
+      + '<input type="text" placeholder="Player name" value="' + (val || '') + '"'
+      + ' style="flex:1;padding:9px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;">'
+      + '<button style="padding:6px 10px;background:transparent;border:1.5px solid #e0e0e0;border-radius:8px;font-size:12px;color:#c0392b;cursor:pointer;" onclick="removeGroupModalPlayer(this)" title="Remove">✕</button>';
+    cont.appendChild(row);
+  });
+}
+
+function addGroupModalPlayer() {
+  const cont = document.getElementById('group-modal-players');
+  if (!cont) return;
+  const count = cont.querySelectorAll('input').length;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+  row.innerHTML = '<span style="font-size:12px;color:var(--text-tertiary);width:16px;text-align:right;flex-shrink:0;">' + (count + 1) + '</span>'
+    + '<input type="text" placeholder="Player name"'
+    + ' style="flex:1;padding:9px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;">'
+    + '<button style="padding:6px 10px;background:transparent;border:1.5px solid #e0e0e0;border-radius:8px;font-size:12px;color:#c0392b;cursor:pointer;" onclick="removeGroupModalPlayer(this)" title="Remove">✕</button>';
+  cont.appendChild(row);
+  setTimeout(() => row.querySelector('input')?.focus(), 50);
+  refreshGroupModalNumbers();
+}
+
+function removeGroupModalPlayer(btn) {
+  const cont = document.getElementById('group-modal-players');
+  if (cont.querySelectorAll('input').length <= 1) { showToast('Need at least 1 player', 'error'); return; }
+  btn.closest('div').remove();
+  refreshGroupModalNumbers();
+}
+
+function refreshGroupModalNumbers() {
+  const cont = document.getElementById('group-modal-players');
+  if (!cont) return;
+  cont.querySelectorAll('div').forEach((row, i) => {
+    const num = row.querySelector('span');
+    if (num) num.textContent = i + 1;
+  });
+}
+
 function showCreateGroupModal() {
   groupModalEditId = null;
-  const titleEl = document.getElementById('group-modal-title');
-  const nameEl = document.getElementById('group-modal-name');
-  const emailsEl = document.getElementById('group-modal-emails');
+  document.getElementById('group-modal-title').textContent = 'Create a group';
+  document.getElementById('group-modal-name').value = '';
+  document.getElementById('group-modal-emails').value = '';
   const errEl = document.getElementById('group-modal-err');
-  if (titleEl) titleEl.textContent = 'Create a group';
-  if (nameEl) nameEl.value = '';
-  if (emailsEl) emailsEl.value = '';
   if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
-  const modal = document.getElementById('group-modal');
-  if (modal) modal.style.display = 'flex';
+  // Start with 4 empty player slots
+  renderGroupModalPlayers(['', '', '', '']);
+  document.getElementById('group-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('group-modal-name')?.focus(), 50);
 }
 
 function showEditGroupModal(groupId) {
   const g = cachedGroups.find(g => g._id === groupId);
   if (!g) return;
   groupModalEditId = groupId;
-  const titleEl = document.getElementById('group-modal-title');
-  const nameEl = document.getElementById('group-modal-name');
-  const emailsEl = document.getElementById('group-modal-emails');
+  document.getElementById('group-modal-title').textContent = 'Edit group';
+  document.getElementById('group-modal-name').value = g.name || '';
+  document.getElementById('group-modal-emails').value = (g.memberEmails || []).join('\n');
   const errEl = document.getElementById('group-modal-err');
-  if (titleEl) titleEl.textContent = 'Edit group';
-  if (nameEl) nameEl.value = g.name || '';
-  if (emailsEl) emailsEl.value = (g.memberEmails || []).join('\n');
   if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
-  const modal = document.getElementById('group-modal');
-  if (modal) modal.style.display = 'flex';
+  renderGroupModalPlayers(g.players?.length ? g.players : ['']);
+  document.getElementById('group-modal').style.display = 'flex';
 }
 
 function hideGroupModal() {
-  const modal = document.getElementById('group-modal');
-  if (modal) modal.style.display = 'none';
+  document.getElementById('group-modal').style.display = 'none';
   groupModalEditId = null;
 }
 
@@ -1050,30 +1091,26 @@ async function confirmSaveGroup() {
   const emailsEl = document.getElementById('group-modal-emails');
   const errEl = document.getElementById('group-modal-err');
   const name = nameEl?.value.trim();
+
   if (!name) {
-    if (errEl) { errEl.textContent = 'Please enter a group name.'; errEl.style.display = ''; }
+    errEl.textContent = 'Please enter a group name.'; errEl.style.display = '';
     return;
   }
 
-  // Collect current player names from inputs
-  const cont = document.getElementById('player-inputs');
-  const players = Array.from(cont?.querySelectorAll('input[type=text]') || [])
+  // Collect players from modal's own inputs
+  const cont = document.getElementById('group-modal-players');
+  const players = Array.from(cont?.querySelectorAll('input') || [])
     .map(i => i.value.trim()).filter(Boolean);
+
   if (players.length < 2) {
-    if (errEl) { errEl.textContent = 'Enter at least 2 player names first.'; errEl.style.display = ''; }
+    errEl.textContent = 'Add at least 2 player names.'; errEl.style.display = '';
     return;
   }
 
-  // Parse emails
-  const rawEmails = emailsEl?.value || '';
-  const memberEmails = rawEmails.split(/[\n,]+/).map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
+  const memberEmails = (emailsEl?.value || '').split(/[\n,]+/)
+    .map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
 
-  const groupData = {
-    name,
-    players,
-    memberEmails,
-    savedAt: new Date().toISOString()
-  };
+  const groupData = { name, players, memberEmails, savedAt: new Date().toISOString() };
 
   const saveBtn = document.querySelector('#group-modal button[onclick="confirmSaveGroup()"]');
   if (saveBtn) saveBtn.textContent = 'Saving…';
@@ -1086,7 +1123,7 @@ async function confirmSaveGroup() {
     await loadGroupsFromFirebase();
     showToast('✓ Group saved!');
   } else {
-    if (errEl) { errEl.textContent = 'Could not save. Try again.'; errEl.style.display = ''; }
+    errEl.textContent = 'Could not save. Try again.'; errEl.style.display = '';
   }
 }
 
@@ -1885,6 +1922,8 @@ window.showEditGroupModal = showEditGroupModal;
 window.showCreateGroupModal = showCreateGroupModal;
 window.hideGroupModal = hideGroupModal;
 window.confirmSaveGroup = confirmSaveGroup;
+window.addGroupModalPlayer = addGroupModalPlayer;
+window.removeGroupModalPlayer = removeGroupModalPlayer;
 window.loadGroupsFromFirebase = loadGroupsFromFirebase;
 window.loginWithGoogle = loginWithGoogle;
 window.hidePlayerSelectModal = hidePlayerSelectModal;

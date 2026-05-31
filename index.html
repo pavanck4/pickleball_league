@@ -349,17 +349,24 @@
 
 <!-- GROUP MODAL -->
 <div id="group-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
-  <div style="background:#fff;border-radius:20px;padding:2rem;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-    <h2 id="group-modal-title" style="font-family:'DM Serif Display',serif;font-size:20px;margin-bottom:6px;">Create a group</h2>
-    <p style="font-size:13px;color:#5a5a56;margin-bottom:1.25rem;">Save the current player names as a reusable group. Share it with teammates by email so they see it too.</p>
+  <div style="background:#fff;border-radius:20px;padding:2rem;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto;">
+    <h2 id="group-modal-title" style="font-family:'DM Serif Display',serif;font-size:20px;margin-bottom:4px;">Create a group</h2>
+    <p style="font-size:13px;color:#5a5a56;margin-bottom:1.25rem;">Save your regular crew so you don't have to retype names each time.</p>
 
     <label style="font-size:12px;font-weight:500;color:#5a5a56;display:block;margin-bottom:4px;">GROUP NAME</label>
-    <input type="text" id="group-modal-name" placeholder="e.g. VIP Players, Tuesday Gang"
-      style="width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:1rem;box-sizing:border-box;">
+    <input type="text" id="group-modal-name" placeholder="e.g. Morning PB Batch, VIP Players"
+      style="width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:1.25rem;box-sizing:border-box;">
+
+    <label style="font-size:12px;font-weight:500;color:#5a5a56;display:block;margin-bottom:8px;">PLAYERS</label>
+    <div id="group-modal-players" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+    <button onclick="addGroupModalPlayer()"
+      style="width:100%;padding:9px;background:transparent;border:1.5px dashed #1D9E75;border-radius:8px;font-size:13px;color:#1D9E75;font-weight:500;cursor:pointer;font-family:inherit;margin-bottom:1.25rem;">
+      ＋ Add player
+    </button>
 
     <label style="font-size:12px;font-weight:500;color:#5a5a56;display:block;margin-bottom:4px;">SHARE WITH <span style="color:#9a9a94;font-weight:400;">(optional — emails of CourtIQ users)</span></label>
     <textarea id="group-modal-emails" placeholder="friend@gmail.com&#10;teammate@gmail.com"
-      style="width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;font-family:inherit;height:88px;resize:none;margin-bottom:6px;box-sizing:border-box;"></textarea>
+      style="width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;font-family:inherit;height:80px;resize:none;margin-bottom:4px;box-sizing:border-box;"></textarea>
     <p style="font-size:12px;color:#9a9a94;margin-bottom:1.25rem;">One email per line. They'll see this group the next time they open CourtIQ.</p>
 
     <div id="group-modal-err" style="font-size:13px;color:#c0392b;margin-bottom:8px;display:none;"></div>

@@ -1129,11 +1129,27 @@ async function confirmSaveGroup() {
 
 function loadGroup(groupId) {
   const g = cachedGroups.find(g => g._id === groupId);
-  if (!g) return;
-  let n = g.players.length;
+  if (!g || !g.players?.length) return;
+  const players = g.players;
+  let n = players.length;
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
-  document.getElementById('inp-n').value = n;
-  refreshPlayerInputs(g.players);
+  // Set count first, then render rows directly — avoids inp-n side-effect bug
+  const inp = document.getElementById('inp-n');
+  if (inp) inp.value = n;
+  const cont = document.getElementById('player-inputs');
+  if (cont) {
+    cont.innerHTML = '';
+    for (let i = 0; i < n; i++) {
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      const lbl = S.mode === 'fixed' ? '<span class="team-label">Team ' + (Math.floor(i / 2) + 1) + '</span>' : '';
+      row.innerHTML = '<span class="player-num">' + (i + 1) + '</span>'
+        + '<input type="text" placeholder="Player ' + (i + 1) + '" value="' + (players[i] || '') + '" id="pi' + i + '">'
+        + lbl
+        + '<button class="btn-delete-player" onclick="deletePlayerRow(this)" title="Remove player">✕</button>';
+      cont.appendChild(row);
+    }
+  }
   showToast('Loaded: ' + g.name, 'link');
 }
 

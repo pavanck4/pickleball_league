@@ -1404,6 +1404,12 @@ function selectMode(m) {
 // Set default mode to rotate on load
 S.mode = 'rotate';
 
+let refreshTimer = null;
+function debouncedRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => refreshPlayerInputs(), 400);
+}
+
 function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
   n = Math.max(3, Math.min(20, n));
@@ -1925,6 +1931,7 @@ function renderStandings() {
 window.gotoTab = gotoTab;
 window.selectMode = selectMode;
 window.refreshPlayerInputs = refreshPlayerInputs;
+window.debouncedRefresh = debouncedRefresh;
 window.generateLeague = generateLeague;
 window.joinLeague = joinLeague;
 window.submitScore = submitScore;

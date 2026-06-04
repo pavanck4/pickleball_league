@@ -1412,7 +1412,7 @@ function debouncedRefresh() {
 
 function refreshPlayerInputs(preload) {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
-  n = Math.max(3, Math.min(20, n));
+  n = Math.max(3, Math.min(40, n));
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
   document.getElementById('inp-n').value = n;
   const hint = document.getElementById('player-limit-hint');
@@ -1491,7 +1491,7 @@ function addNewPlayer() {
 
 function clearPlayerInputs() {
   let n = parseInt(document.getElementById('inp-n').value) || 6;
-  n = Math.max(3, Math.min(20, n));
+  n = Math.max(3, Math.min(40, n));
   if (S.mode === 'fixed' && n % 2 !== 0) n++;
   const cont = document.getElementById('player-inputs');
   if (!cont) return;

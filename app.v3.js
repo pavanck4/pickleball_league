@@ -1643,25 +1643,101 @@ function generateFixed(players, rounds) {
   S.schedule.forEach(r => r.forEach(m => { S.results[m.id] = { s1: '', s2: '', done: false }; }));
 }
 
-function findBestPairs(playingIndices, partnerCount) {
+function findBestPairs(playingIndices, partnerCount, opponentCount) {
+  var n = playingIndices.length;
+
+  // Try all permutations systematically via backtracking to guarantee unique partners
+  // when mathematically possible (rounds < n), before falling back to best-effort random
   var bestScore = Infinity;
   var bestMatches = [];
-  for (var attempt = 0; attempt < 100; attempt++) {
-    var shuffled = playingIndices.slice();
-    for (var i = shuffled.length - 1; i > 0; i--) {
+
+  // Backtracking: build pairs one court at a time ensuring no partner repeats
+  function backtrack(remaining, currentMatches) {
+    if (remaining.length === 0) {
+      // All players paired — score by opponent repeats only
+      var oppScore = 0;
+      currentMatches.forEach(function(m) {
+        var a = m.t1[0], b = m.t1[1], c = m.t2[0], d = m.t2[1];
+        oppScore += opponentCount[a][c] + opponentCount[a][d]
+                  + opponentCount[b][c] + opponentCount[b][d];
+      });
+      if (oppScore < bestScore) {
+        bestScore = oppScore;
+        bestMatches = currentMatches.slice();
+      }
+      return bestScore === 0; // short-circuit if perfect
+    }
+
+    var a = remaining[0];
+    var rest = remaining.slice(1);
+
+    // Try every possible partner for 'a' that hasn't been their partner before
+    var candidates = [];
+    for (var i = 0; i < rest.length; i++) {
+      var b = rest[i];
+      if (partnerCount[a][b] === 0) candidates.push(i);
+    }
+    // If no fresh partner available (rounds >= players), allow repeats
+    if (candidates.length === 0) {
+      for (var i = 0; i < rest.length; i++) candidates.push(i);
+    }
+
+    // Shuffle candidates so we explore different orderings
+    for (var i = candidates.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
-      var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+      var tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
     }
-    var matches = [];
-    var score = 0;
-    for (var k = 0; k + 3 < shuffled.length; k += 4) {
-      var a = shuffled[k], b = shuffled[k+1], c = shuffled[k+2], d = shuffled[k+3];
-      score += partnerCount[a][b] + partnerCount[c][d];
-      matches.push({ t1: [a,b], t2: [c,d] });
+
+    for (var ci = 0; ci < candidates.length; ci++) {
+      var bIdx = candidates[ci];
+      var b = rest[bIdx];
+      var afterPair = rest.filter(function(_, idx) { return idx !== bIdx; });
+
+      // Now pick opponents for the a-b pair from afterPair
+      // Take first two as one side, remaining as other side — try all combos
+      if (afterPair.length < 2) {
+        // Not enough for a full court, skip
+        var done = backtrack(afterPair, currentMatches.concat([{ t1: [a, b], t2: [] }]));
+        if (done) return true;
+        continue;
+      }
+
+      var c = afterPair[0];
+      var remaining2 = afterPair.slice(1);
+
+      // Try each player in remaining2 as d (opponent pair partner for c)
+      var dCandidates = [];
+      for (var di = 0; di < remaining2.length; di++) {
+        if (partnerCount[c][remaining2[di]] === 0) dCandidates.push(di);
+      }
+      if (dCandidates.length === 0) {
+        for (var di = 0; di < remaining2.length; di++) dCandidates.push(di);
+      }
+      // Shuffle d candidates
+      for (var i = dCandidates.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = dCandidates[i]; dCandidates[i] = dCandidates[j]; dCandidates[j] = tmp;
+      }
+
+      for (var di = 0; di < dCandidates.length; di++) {
+        var dIdx = dCandidates[di];
+        var d = remaining2[dIdx];
+        var afterCourt = remaining2.filter(function(_, idx) { return idx !== dIdx; });
+        var match = { t1: [a, b], t2: [c, d] };
+        var done = backtrack(afterCourt, currentMatches.concat([match]));
+        if (done) return true;
+      }
     }
-    if (score < bestScore) { bestScore = score; bestMatches = matches; }
+    return false;
+  }
+
+  // Run backtracking multiple times with different random seeds for best opponent variety
+  var attempts = Math.min(30, Math.max(10, 120 / (n || 1)));
+  for (var attempt = 0; attempt < attempts; attempt++) {
+    backtrack(playingIndices.slice(), []);
     if (bestScore === 0) break;
   }
+
   return bestMatches;
 }
 
@@ -1674,7 +1750,11 @@ function generateRotating(players, rounds) {
   var sittingCount = n - playingCount;
 
   var partnerCount = [];
-  for (var i = 0; i < n; i++) partnerCount.push(new Array(n).fill(0));
+  var opponentCount = [];
+  for (var i = 0; i < n; i++) {
+    partnerCount.push(new Array(n).fill(0));
+    opponentCount.push(new Array(n).fill(0));
+  }
   var byeCount = new Array(n).fill(0);
   var playCount = new Array(n).fill(0);
 
@@ -1684,14 +1764,12 @@ function generateRotating(players, rounds) {
     var sitting = [];
 
     if (sittingCount > 0) {
-      // Sort by byeCount ascending, then playCount descending, then random tiebreak
-      // The random tiebreak prevents the same players sitting out every N rounds
       var scores = [];
       for (var i = 0; i < n; i++) scores.push({ idx: i, byes: byeCount[i], plays: playCount[i], rand: Math.random() });
       scores.sort(function(a, b) {
-        if (a.byes !== b.byes) return a.byes - b.byes;   // fewest byes sits out first
-        if (a.plays !== b.plays) return b.plays - a.plays; // most plays sits out if tied
-        return a.rand - b.rand;                            // random final tiebreak
+        if (a.byes !== b.byes) return a.byes - b.byes;
+        if (a.plays !== b.plays) return b.plays - a.plays;
+        return a.rand - b.rand;
       });
       for (var k = 0; k < sittingCount; k++) {
         sitting.push(scores[k].idx);
@@ -1702,17 +1780,22 @@ function generateRotating(players, rounds) {
     var playing = [];
     for (var i = 0; i < n; i++) { if (sitting.indexOf(i) === -1) playing.push(i); }
 
-    // Combined bye card showing all sitting players
     if (sitting.length > 0) {
       var byeNames = sitting.map(function(idx) { return players[idx]; });
       roundMatches.push({ id: 'r'+r+'bye', round: r, isBye: true, byePlayer: byeNames.join(', '), type: 'rotate' });
     }
 
-    var pairs = findBestPairs(playing, partnerCount);
+    var pairs = findBestPairs(playing, partnerCount, opponentCount);
     pairs.forEach(function(pair, mi) {
       var a = pair.t1[0], b = pair.t1[1], c = pair.t2[0], d = pair.t2[1];
+      // Update partner history
       partnerCount[a][b]++; partnerCount[b][a]++;
       partnerCount[c][d]++; partnerCount[d][c]++;
+      // Update opponent history
+      opponentCount[a][c]++; opponentCount[c][a]++;
+      opponentCount[a][d]++; opponentCount[d][a]++;
+      opponentCount[b][c]++; opponentCount[c][b]++;
+      opponentCount[b][d]++; opponentCount[d][b]++;
       playCount[a]++; playCount[b]++; playCount[c]++; playCount[d]++;
       roundMatches.push({ id: 'r'+r+'m'+mi, round: r, t1pair: pair.t1, t2pair: pair.t2, type: 'rotate' });
     });

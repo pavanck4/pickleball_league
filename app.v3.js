@@ -1644,95 +1644,88 @@ function generateFixed(players, rounds) {
 }
 
 function findBestPairs(playingIndices, partnerCount, opponentCount) {
-  var n = playingIndices.length;
-
-  // Try all permutations systematically via backtracking to guarantee unique partners
-  // when mathematically possible (rounds < n), before falling back to best-effort random
   var bestScore = Infinity;
   var bestMatches = [];
 
-  // Backtracking: build pairs one court at a time ensuring no partner repeats
+  // Score a complete set of matches — lower is better
+  // Priority 1: minimise partner repeats (weight 1000)
+  // Priority 2: minimise how many times partners have played together (weight 100) — spreads repeats fairly
+  // Priority 3: minimise opponent repeats (weight 1)
+  function scoreMatches(matches) {
+    var score = 0;
+    matches.forEach(function(m) {
+      var a = m.t1[0], b = m.t1[1], c = m.t2[0], d = m.t2[1];
+      var pc1 = partnerCount[a][b], pc2 = partnerCount[c][d];
+      var oppRepeat = opponentCount[a][c] + opponentCount[a][d]
+                    + opponentCount[b][c] + opponentCount[b][d];
+      // Hard penalty for any repeat, plus extra for how many times repeated (fair distribution)
+      score += (pc1 > 0 ? 1000 + pc1 * 100 : 0)
+             + (pc2 > 0 ? 1000 + pc2 * 100 : 0)
+             + oppRepeat;
+    });
+    return score;
+  }
+
+  // Backtracking: pick partners greedily, prefer least-used pair
   function backtrack(remaining, currentMatches) {
     if (remaining.length === 0) {
-      // All players paired — score by opponent repeats only
-      var oppScore = 0;
-      currentMatches.forEach(function(m) {
-        var a = m.t1[0], b = m.t1[1], c = m.t2[0], d = m.t2[1];
-        oppScore += opponentCount[a][c] + opponentCount[a][d]
-                  + opponentCount[b][c] + opponentCount[b][d];
-      });
-      if (oppScore < bestScore) {
-        bestScore = oppScore;
-        bestMatches = currentMatches.slice();
-      }
-      return bestScore === 0; // short-circuit if perfect
+      var s = scoreMatches(currentMatches);
+      if (s < bestScore) { bestScore = s; bestMatches = currentMatches.slice(); }
+      return bestScore === 0;
     }
 
     var a = remaining[0];
     var rest = remaining.slice(1);
 
-    // Try every possible partner for 'a' that hasn't been their partner before
-    var candidates = [];
-    for (var i = 0; i < rest.length; i++) {
-      var b = rest[i];
-      if (partnerCount[a][b] === 0) candidates.push(i);
-    }
-    // If no fresh partner available (rounds >= players), allow repeats
-    if (candidates.length === 0) {
-      for (var i = 0; i < rest.length; i++) candidates.push(i);
-    }
-
-    // Shuffle candidates so we explore different orderings
-    for (var i = candidates.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
-    }
+    // Build candidates sorted: fresh partners first, then by least partnerCount
+    var candidates = rest.map(function(b, i) {
+      return { idx: i, b: b, pc: partnerCount[a][b], rand: Math.random() };
+    });
+    candidates.sort(function(x, y) {
+      if (x.pc !== y.pc) return x.pc - y.pc; // prefer least-used partner
+      return x.rand - y.rand;                 // random tiebreak for variety
+    });
 
     for (var ci = 0; ci < candidates.length; ci++) {
-      var bIdx = candidates[ci];
-      var b = rest[bIdx];
-      var afterPair = rest.filter(function(_, idx) { return idx !== bIdx; });
+      var bIdx = candidates[ci].idx;
+      var b = candidates[ci].b;
+      var afterAB = rest.filter(function(_, idx) { return idx !== bIdx; });
 
-      // Now pick opponents for the a-b pair from afterPair
-      // Take first two as one side, remaining as other side — try all combos
-      if (afterPair.length < 2) {
-        // Not enough for a full court, skip
-        var done = backtrack(afterPair, currentMatches.concat([{ t1: [a, b], t2: [] }]));
-        if (done) return true;
-        continue;
-      }
+      if (afterAB.length < 2) continue; // not enough for a full court
 
-      var c = afterPair[0];
-      var remaining2 = afterPair.slice(1);
+      // Build opponent pair candidates sorted by least partnerCount
+      var oppCandidates = [];
+      for (var i = 0; i < afterAB.length; i++) {
+        var c = afterAB[i];
+        for (var j = i + 1; j < afterAB.length; j++) {
+          var d = afterAB[j];
+          oppCandidates.push({
+            ci: i, di: j, c: c, d: d,
+            pc: partnerCount[c][d],
+            rand: Math.random()
+          });
+        }
+      }
+      oppCandidates.sort(function(x, y) {
+        if (x.pc !== y.pc) return x.pc - y.pc;
+        return x.rand - y.rand;
+      });
 
-      // Try each player in remaining2 as d (opponent pair partner for c)
-      var dCandidates = [];
-      for (var di = 0; di < remaining2.length; di++) {
-        if (partnerCount[c][remaining2[di]] === 0) dCandidates.push(di);
-      }
-      if (dCandidates.length === 0) {
-        for (var di = 0; di < remaining2.length; di++) dCandidates.push(di);
-      }
-      // Shuffle d candidates
-      for (var i = dCandidates.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = dCandidates[i]; dCandidates[i] = dCandidates[j]; dCandidates[j] = tmp;
-      }
-
-      for (var di = 0; di < dCandidates.length; di++) {
-        var dIdx = dCandidates[di];
-        var d = remaining2[dIdx];
-        var afterCourt = remaining2.filter(function(_, idx) { return idx !== dIdx; });
-        var match = { t1: [a, b], t2: [c, d] };
+      for (var oi = 0; oi < oppCandidates.length; oi++) {
+        var opp = oppCandidates[oi];
+        var afterCourt = afterAB.filter(function(_, idx) { return idx !== opp.ci && idx !== opp.di; });
+        var match = { t1: [a, b], t2: [opp.c, opp.d] };
         var done = backtrack(afterCourt, currentMatches.concat([match]));
         if (done) return true;
+        // Only try more opponent combos if we haven't found a perfect solution yet
+        if (bestScore === 0) return true;
       }
     }
     return false;
   }
 
-  // Run backtracking multiple times with different random seeds for best opponent variety
-  var attempts = Math.min(30, Math.max(10, 120 / (n || 1)));
+  // Run multiple times for randomness variety
+  var attempts = 40;
   for (var attempt = 0; attempt < attempts; attempt++) {
     backtrack(playingIndices.slice(), []);
     if (bestScore === 0) break;
